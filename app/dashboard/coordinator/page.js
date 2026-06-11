@@ -75,7 +75,7 @@ export default async function CoordinatorDashboard() {
           <nav className="nav">
             <div className="nav-section">Hoofdmenu</div>
             <a className="nav-item active" href="/dashboard/coordinator">📊 Dashboard</a>
-            <a className="nav-item" href="#">👥 Studenten</a>
+            <a className="nav-item" href="/dashboard/coordinator/studenten">👥 Studenten</a>
             <a className="nav-item" href="#">🔗 Koppelingen</a>
             <a className="nav-item" href="#">📋 Opdrachten</a>
             <div className="nav-section">Beheer</div>
