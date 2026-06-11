@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  const next = searchParams.get('next') ?? '/'
 
   if (code) {
     const supabase = await createClient()
@@ -13,12 +14,13 @@ export async function GET(request) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
+        // Haal profiel op
         const { data: profile } = await supabase
           .from('profiles')
           .select('role, school_id')
           .eq('user_id', user.id)
           .not('school_id', 'is', null)
-          .single()
+          .maybeSingle()
 
         const roleRoutes = {
           coordinator: '/dashboard/coordinator',
@@ -28,11 +30,21 @@ export async function GET(request) {
           super_admin: '/dashboard/admin',
         }
 
-        const route = roleRoutes[profile?.role] || '/dashboard/coordinator'
-        return NextResponse.redirect(new URL(route, origin))
+        const route = profile?.role ? (roleRoutes[profile.role] ?? '/dashboard/coordinator') : '/dashboard/coordinator'
+        
+        const forwardedHost = request.headers.get('x-forwarded-host')
+        const isLocalEnv = process.env.NODE_ENV === 'development'
+        
+        if (isLocalEnv) {
+          return NextResponse.redirect(`${origin}${route}`)
+        } else if (forwardedHost) {
+          return NextResponse.redirect(`https://${forwardedHost}${route}`)
+        } else {
+          return NextResponse.redirect(`${origin}${route}`)
+        }
       }
     }
   }
 
-  return NextResponse.redirect(new URL('/login?error=auth', origin))
+  return NextResponse.redirect(`${origin}/login?error=auth`)
 }

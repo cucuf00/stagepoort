@@ -22,11 +22,15 @@ export async function middleware(request) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
 
-  // Publieke routes
-  if (pathname === '/login' || pathname.startsWith('/auth')) {
+  // Altijd doorlaten: login, auth callback, static files
+  if (
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/_next') ||
+    pathname === '/favicon.ico'
+  ) {
     return supabaseResponse
   }
 
