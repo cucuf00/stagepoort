@@ -10,24 +10,25 @@ export async function GET(request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Haal rol op en stuur door naar juiste dashboard
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('role')
-          .eq('email', user.email)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, school_id')
+          .eq('user_id', user.id)
+          .not('school_id', 'is', null)
           .single()
 
         const roleRoutes = {
           coordinator: '/dashboard/coordinator',
-          student: '/dashboard/student',
-          coach: '/dashboard/coach',
-          company: '/dashboard/company',
+          student:     '/dashboard/student',
+          coach:       '/dashboard/coach',
+          company:     '/dashboard/company',
+          super_admin: '/dashboard/admin',
         }
 
-        const route = roleRoutes[userData?.role] || '/dashboard/coordinator'
+        const route = roleRoutes[profile?.role] || '/dashboard/coordinator'
         return NextResponse.redirect(new URL(route, origin))
       }
     }
