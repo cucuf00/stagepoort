@@ -131,28 +131,16 @@ export default function IntakePage() {
 
   async function verzend() {
     setBezig(true)
-    const supabase = createClient()
-    const { error } = await supabase.from('placements').update({
-      status: 'review',
-      submitted_at: new Date().toISOString(),
-      first_name: form.voornaam,
-      infix: form.tussenvoegsel || null,
-      last_name: form.achternaam,
-      student_phone: form.telefoon_leerling,
-      company_name: form.bedrijfsnaam,
-      company_address: form.bezoekadres,
-      company_postcode: form.postcode,
-      company_city: form.plaats,
-      company_phone: form.telefoon_bedrijf,
-      company_email: form.email_bedrijf,
-      supervisor_name: form.stagebegeleider,
-      green_stage: form.groene_stage === 'ja',
-    }).eq('id', token)
-
-    if (!error) {
+    const res = await fetch('/api/intake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placementId: token, data: form }),
+    })
+    const result = await res.json()
+    if (result.success) {
       setVerzonden(true)
     } else {
-      alert('Er ging iets mis: ' + error.message)
+      alert('Er ging iets mis: ' + result.error)
     }
     setBezig(false)
   }
