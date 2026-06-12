@@ -1,19 +1,696 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import StudentClient from './StudentClient'
+'use client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
-export default async function StudentDashboard() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+const DARK = {
+  bg: '#0B0F14',
+  card: '#141922',
+  card2: '#1A2130',
+  border: 'rgba(255,255,255,.07)',
+  text: '#F0F4F8',
+  sub: '#7A8A9A',
+  orange: '#F26B1D',
+  green: '#4ADE80',
+  blue: '#60A5FA',
+  purple: '#A78BFA',
+}
 
-  const { data: userData } = await supabase
-    .from('users')
-    .select('name, role')
-    .eq('email', user.email)
-    .single()
+const S = {
+  page: { minHeight: '100vh', background: DARK.bg, color: DARK.text, fontFamily: 'Inter,sans-serif', paddingBottom: 80 },
+  card: { background: DARK.card, borderRadius: 16, border: `1px solid ${DARK.border}`, padding: 20, marginBottom: 12 },
+  label: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: DARK.sub, marginBottom: 8 },
+}
 
-  if (userData?.role !== 'student') redirect('/login')
+function getWeekNumber(d = new Date()) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return [Math.ceil((((date - yearStart) / 86400000) + 1) / 7), date.getUTCFullYear()]
+}
 
-  return <StudentClient user={userData} email={user.email} />
+function XPBalk({ xp, level }) {
+  const xpPerLevel = 300
+  const huidigeXP = xp % xpPerLevel
+  const pct = Math.min((huidigeXP / xpPerLevel) * 100, 100)
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: DARK.sub, marginBottom: 6 }}>
+        <span>Level {level}</span>
+        <span>{xpPerLevel - huidigeXP} XP tot level {level + 1}</span>
+      </div>
+      <div style={{ height: 6, background: 'rgba(255,255,255,.1)', borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${DARK.orange}, #FF9A3C)`, borderRadius: 99, transition: 'width .5s ease' }} />
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// MIJN STAGE TAB
+// ============================================================
+function MijnStageTab({ profile, placement, badges, studentBadges, klassement, klasKlassement, uren }) {
+  const [klassTab, setKlassTab] = useState('school')
+  const [klassType, setKlassType] = useState('xp')
+
+  const behaaldIds = new Set(studentBadges.map(b => b.badge_id))
+  const goedgekeurdUren = uren.filter(u => u.status === 'approved').reduce((s, u) => s + Number(u.hours), 0)
+
+  const getBadgeProgress = (badge) => {
+    if (badge.type === 'hours') return { current: goedgekeurdUren, target: badge.threshold }
+    if (badge.type === 'streak') return { current: profile.streak || 0, target: badge.threshold }
+    if (badge.type === 'assignments') return { current: 0, target: badge.threshold }
+    return null
+  }
+
+  const klasData = klassTab === 'school' ? klassement : klasKlassement
+  const gesorteerd = [...(klasData || [])].sort((a, b) => {
+    if (klassType === 'xp') return (b.xp || 0) - (a.xp || 0)
+    if (klassType === 'streak') return (b.streak || 0) - (a.streak || 0)
+    return 0
+  })
+
+  return (
+    <div>
+      {/* Hero */}
+      <div style={{ ...S.card, background: 'linear-gradient(135deg, #1A2130 0%, #0F1820 100%)', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', background: `linear-gradient(135deg, ${DARK.orange}, #FF9A3C)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
+            {profile?.name?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, fontWeight: 800 }}>Yo {profile?.name?.split(' ')[0]} 👋</div>
+            <div style={{ fontSize: 13, color: DARK.sub }}>
+              {placement?.company_name ? `Stage bij ${placement.company_name}` : 'Stage nog niet gekoppeld'}
+              {placement?.supervisor_name ? ` · begeleider ${placement.supervisor_name}` : ''}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+          {[
+            { val: `${profile?.streak || 0} 🔥`, label: 'weken streak' },
+            { val: `${profile?.xp || 0}`, label: `XP · level ${profile?.level || 1}` },
+            { val: `${goedgekeurdUren}`, label: `van ${placement?.hours_required || 320} uur` },
+          ].map((s, i) => (
+            <div key={i} style={{ background: 'rgba(255,255,255,.05)', borderRadius: 12, padding: '12px 10px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 20, fontWeight: 800, color: DARK.orange }}>{s.val}</div>
+              <div style={{ fontSize: 11, color: DARK.sub, marginTop: 2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <XPBalk xp={profile?.xp || 0} level={profile?.level || 1} />
+      </div>
+
+      {/* Coach + Begeleider */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div style={{ ...S.card, margin: 0, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: DARK.sub, marginBottom: 8 }}>👨‍🏫 Stagecoach</div>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{placement?.coach_name || '—'}</div>
+          <div style={{ fontSize: 12, color: DARK.sub, marginBottom: 10 }}>{placement?.coach_email || ''}</div>
+          {placement?.coach_email && (
+            <a href={`mailto:${placement.coach_email}`} style={{ display: 'block', textAlign: 'center', padding: '7px', background: 'rgba(242,107,29,.15)', borderRadius: 8, color: DARK.orange, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>✉️ Mail coach</a>
+          )}
+        </div>
+        <div style={{ ...S.card, margin: 0, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: DARK.sub, marginBottom: 8 }}>🏢 Stagebegeleider</div>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{placement?.supervisor_name || '—'}</div>
+          <div style={{ fontSize: 12, color: DARK.sub, marginBottom: 10 }}>{placement?.company_name || ''}</div>
+          <div style={{ display: 'block', textAlign: 'center', padding: '7px', background: 'rgba(255,255,255,.05)', borderRadius: 8, color: DARK.sub, fontSize: 12, fontWeight: 700 }}>📨 Link opnieuw</div>
+        </div>
+      </div>
+
+      {/* Route */}
+      <div style={S.card}>
+        <div style={S.label}>🧭 Jouw route</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {['Gestart', 'Uren & opdrachten', 'Tussenevaluatie', 'Eindgesprek'].map((stap, i) => {
+            const actief = i <= 1
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < 3 ? 1 : 'none' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: actief ? DARK.green : 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: actief ? '#0B0F14' : DARK.sub, flexShrink: 0 }}>
+                    {actief ? '✓' : i + 1}
+                  </div>
+                  <div style={{ fontSize: 10, color: actief ? DARK.green : DARK.sub, textAlign: 'center', maxWidth: 60 }}>{stap}</div>
+                </div>
+                {i < 3 && <div style={{ flex: 1, height: 2, background: actief ? DARK.green : 'rgba(255,255,255,.1)', margin: '0 4px', marginBottom: 20 }} />}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div style={S.card}>
+        <div style={{ ...S.label, marginBottom: 4 }}>Badges — {behaaldIds.size} van {badges.length} behaald</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+          {badges.map(badge => {
+            const behaald = behaaldIds.has(badge.id)
+            const prog = getBadgeProgress(badge)
+            return (
+              <div key={badge.id} style={{ background: behaald ? 'rgba(242,107,29,.12)' : 'rgba(255,255,255,.03)', borderRadius: 12, padding: 12, border: `1px solid ${behaald ? 'rgba(242,107,29,.4)' : DARK.border}`, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, marginBottom: 4, filter: behaald ? 'none' : 'grayscale(1) opacity(.4)' }}>{badge.emoji}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: behaald ? DARK.text : DARK.sub, marginBottom: prog ? 6 : 0 }}>{badge.name}</div>
+                {!behaald && prog && (
+                  <div>
+                    <div style={{ height: 3, background: 'rgba(255,255,255,.08)', borderRadius: 99, overflow: 'hidden', marginTop: 4 }}>
+                      <div style={{ width: `${Math.min((prog.current / prog.target) * 100, 100)}%`, height: '100%', background: DARK.orange, borderRadius: 99 }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: DARK.sub, marginTop: 3 }}>{prog.current} / {prog.target}</div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Klassement */}
+      <div style={S.card}>
+        <div style={S.label}>🏆 Klassement</div>
+
+        {/* School / Klas tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          {[['school', '🏫 School'], ['klas', '👥 Mijn klas']].map(([k, l]) => (
+            <button key={k} onClick={() => setKlassTab(k)} style={{ flex: 1, padding: '7px', borderRadius: 20, border: 'none', background: klassTab === k ? DARK.orange : 'rgba(255,255,255,.06)', color: klassTab === k ? '#fff' : DARK.sub, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{l}</button>
+          ))}
+        </div>
+
+        {/* Type tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          {[['xp', '⚡ XP'], ['streak', '🔥 Streak']].map(([k, l]) => (
+            <button key={k} onClick={() => setKlassType(k)} style={{ padding: '5px 12px', borderRadius: 20, border: 'none', background: klassType === k ? 'rgba(242,107,29,.2)' : 'rgba(255,255,255,.04)', color: klassType === k ? DARK.orange : DARK.sub, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>{l}</button>
+          ))}
+        </div>
+
+        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {gesorteerd.map((s, i) => {
+            const isJij = s.id === profile?.id
+            const waarde = klassType === 'xp' ? `${s.xp || 0} XP` : `${s.streak || 0} weken 🔥`
+            return (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: isJij ? 'rgba(242,107,29,.12)' : 'transparent', border: isJij ? `1px solid rgba(242,107,29,.3)` : '1px solid transparent', marginBottom: 4 }}>
+                <div style={{ width: 24, textAlign: 'center', fontWeight: 800, fontSize: 13, color: i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : i === 2 ? '#CD7F32' : DARK.sub }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                </div>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: isJij ? 700 : 500 }}>
+                  {isJij ? `${s.name} (jij)` : s.name}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: isJij ? DARK.orange : DARK.text }}>{waarde}</div>
+              </div>
+            )
+          })}
+          {gesorteerd.length === 0 && <div style={{ textAlign: 'center', color: DARK.sub, fontSize: 13, padding: 20 }}>Nog geen data</div>}
+        </div>
+        <div style={{ fontSize: 11, color: DARK.sub, marginTop: 10, textAlign: 'center', lineHeight: 1.5 }}>
+          Alleen scores zijn zichtbaar — nooit cijfers of reflecties.
+        </div>
+      </div>
+
+      {/* Laatste uren */}
+      {uren.length > 0 && (
+        <div style={S.card}>
+          <div style={S.label}>Laatste uren</div>
+          {uren.slice(0, 3).map(u => (
+            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${DARK.border}` }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{u.description?.slice(0, 40)}{u.description?.length > 40 ? '...' : ''}</div>
+                <div style={{ fontSize: 11, color: DARK.sub }}>{new Date(u.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} · {u.hours}u</div>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: u.status === 'approved' ? 'rgba(74,222,128,.15)' : u.status === 'rejected' ? 'rgba(239,68,68,.15)' : 'rgba(251,191,36,.15)', color: u.status === 'approved' ? DARK.green : u.status === 'rejected' ? '#EF4444' : '#FBBf24' }}>
+                {u.status === 'approved' ? 'Goedgekeurd' : u.status === 'rejected' ? 'Afgekeurd' : 'Wacht'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// UREN TAB
+// ============================================================
+function UrenTab({ profile, placement, uren, setUren }) {
+  const [datum, setDatum] = useState(new Date().toISOString().split('T')[0])
+  const [aantal, setAantal] = useState('')
+  const [omschrijving, setOmschrijving] = useState('')
+  const [bezig, setBezig] = useState(false)
+  const [toast, setToast] = useState('')
+
+  const weekNr = (date) => {
+    const d = new Date(date)
+    const startOfYear = new Date(d.getFullYear(), 0, 1)
+    return Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+  }
+
+  async function indienen() {
+    if (!aantal || !omschrijving || !placement?.id) return
+    setBezig(true)
+    const supabase = createClient()
+    const { data, error } = await supabase.from('hours').insert({
+      school_id: profile.school_id,
+      placement_id: placement.id,
+      student_id: profile.id,
+      date: datum,
+      hours: parseFloat(aantal),
+      description: omschrijving,
+      status: 'pending',
+    }).select().single()
+
+    if (!error) {
+      setUren(prev => [data, ...prev])
+      setAantal('')
+      setOmschrijving('')
+      setToast('✅ Uren ingediend!')
+      setTimeout(() => setToast(''), 3000)
+    }
+    setBezig(false)
+  }
+
+  const perWeek = uren.reduce((acc, u) => {
+    const wk = `Week ${weekNr(u.date)}`
+    if (!acc[wk]) acc[wk] = []
+    acc[wk].push(u)
+    return acc
+  }, {})
+
+  return (
+    <div>
+      {toast && (
+        <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', background: '#1A7F52', color: '#fff', padding: '12px 24px', borderRadius: 12, fontWeight: 700, fontSize: 14, zIndex: 999 }}>{toast}</div>
+      )}
+
+      <div style={S.card}>
+        <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Nieuwe uren registreren</div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ ...S.label }}>Datum</label>
+          <input type="date" value={datum} onChange={e => setDatum(e.target.value)} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none' }} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>Aantal uren</label>
+          <input type="number" min="0.5" max="12" step="0.5" value={aantal} onChange={e => setAantal(e.target.value)} placeholder="8" style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none' }} />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={S.label}>Wat heb je gedaan?</label>
+          <textarea value={omschrijving} onChange={e => setOmschrijving(e.target.value)} placeholder="Bijv. meegewerkt aan sprintreview en testscripts geschreven" rows={3} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none', resize: 'none' }} />
+        </div>
+        <button onClick={indienen} disabled={!aantal || !omschrijving || bezig} style={{ width: '100%', padding: '14px', background: (aantal && omschrijving && !bezig) ? DARK.orange : 'rgba(255,255,255,.08)', border: 'none', borderRadius: 12, color: (aantal && omschrijving) ? '#fff' : DARK.sub, fontWeight: 700, fontSize: 15, cursor: (aantal && omschrijving && !bezig) ? 'pointer' : 'not-allowed' }}>
+          {bezig ? '⏳ Bezig...' : 'Uren indienen ⚡'}
+        </button>
+      </div>
+
+      {Object.entries(perWeek).map(([week, regels]) => (
+        <div key={week} style={S.card}>
+          <div style={S.label}>{week}</div>
+          {regels.map(u => (
+            <div key={u.id} style={{ borderBottom: `1px solid ${DARK.border}`, paddingBottom: 10, marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{u.description}</div>
+                  <div style={{ fontSize: 11, color: DARK.sub }}>{new Date(u.date).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })} · {u.hours} uur</div>
+                  {u.status === 'rejected' && u.rejection_reason && (
+                    <div style={{ fontSize: 11, color: '#EF4444', marginTop: 4 }}>↳ {u.rejection_reason}</div>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0, background: u.status === 'approved' ? 'rgba(74,222,128,.15)' : u.status === 'rejected' ? 'rgba(239,68,68,.15)' : 'rgba(251,191,36,.15)', color: u.status === 'approved' ? DARK.green : u.status === 'rejected' ? '#EF4444' : '#FBBF24' }}>
+                  {u.status === 'approved' ? 'Goedgekeurd' : u.status === 'rejected' ? 'Afgekeurd' : 'Wacht op goedkeuring'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {uren.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 40, color: DARK.sub }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⏱</div>
+          <div style={{ fontSize: 14 }}>Nog geen uren ingediend</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// OPDRACHTEN TAB
+// ============================================================
+function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleveringen }) {
+  const [actief, setActief] = useState(null)
+  const [antwoord, setAntwoord] = useState('')
+  const [bezig, setBezig] = useState(false)
+
+  async function lever(assignmentId) {
+    if (!antwoord.trim()) return
+    setBezig(true)
+    const supabase = createClient()
+    const { data, error } = await supabase.from('student_assignments').upsert({
+      school_id: profile.school_id,
+      assignment_id: assignmentId,
+      student_id: profile.id,
+      placement_id: placement?.id,
+      status: 'submitted',
+      answer: antwoord,
+      submitted_at: new Date().toISOString(),
+    }, { onConflict: 'assignment_id,student_id' }).select().single()
+
+    if (!error) {
+      setInleveringen(prev => [...prev.filter(i => i.assignment_id !== assignmentId), data])
+      setActief(null)
+      setAntwoord('')
+    }
+    setBezig(false)
+  }
+
+  return (
+    <div>
+      {opdrachten.map(op => {
+        const inlevering = inleveringen.find(i => i.assignment_id === op.id)
+        const status = inlevering?.status || 'open'
+
+        return (
+          <div key={op.id} style={{ ...S.card }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{op.title}</div>
+                {op.description && <div style={{ fontSize: 13, color: DARK.sub, lineHeight: 1.5 }}>{op.description}</div>}
+                <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                  {op.deadline && <span style={{ fontSize: 11, color: DARK.sub }}>📅 {new Date(op.deadline).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}</span>}
+                  {inlevering?.grade && <span style={{ fontSize: 11, fontWeight: 700, color: inlevering.grade >= 5.5 ? DARK.green : '#EF4444' }}>cijfer {inlevering.grade.toFixed(1)}</span>}
+                </div>
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {status === 'graded' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(74,222,128,.15)', color: DARK.green }}>Beoordeeld</span>}
+                {status === 'submitted' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(251,191,36,.15)', color: '#FBBF24' }}>Ingeleverd</span>}
+                {status === 'open' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.07)', color: DARK.sub }}>Open</span>}
+              </div>
+            </div>
+
+            {status === 'open' && (
+              actief === op.id ? (
+                <div style={{ marginTop: 12 }}>
+                  <textarea value={antwoord} onChange={e => setAntwoord(e.target.value)} placeholder="Schrijf hier je antwoord..." rows={4} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 13, outline: 'none', resize: 'none', marginBottom: 10 }} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => lever(op.id)} disabled={!antwoord.trim() || bezig} style={{ flex: 1, padding: '11px', background: DARK.orange, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                      {bezig ? '⏳' : `Inleveren +${op.xp_reward || 100} XP ⚡`}
+                    </button>
+                    <button onClick={() => setActief(null)} style={{ padding: '11px 16px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: DARK.sub, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Annuleer</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setActief(op.id)} style={{ width: '100%', padding: '10px', background: 'rgba(242,107,29,.12)', border: `1px solid rgba(242,107,29,.3)`, borderRadius: 10, color: DARK.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
+                  Start opdracht · +{op.xp_reward || 100} XP ⚡
+                </button>
+              )
+            )}
+          </div>
+        )
+      })}
+
+      {opdrachten.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 40, color: DARK.sub }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+          <div style={{ fontSize: 14 }}>Nog geen opdrachten klaargezet</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// WEEKSTORY TAB
+// ============================================================
+function WeekstoryTab({ profile, placement, stories, setStories }) {
+  const [stap, setStap] = useState(0)
+  const [antwoorden, setAntwoorden] = useState({ mood: '', a1: '', a2: '', a3: '' })
+  const [bezig, setBezig] = useState(false)
+  const [xpPop, setXpPop] = useState(false)
+  const [klaar, setKlaar] = useState(false)
+
+  const [weekNr, jaar] = getWeekNumber()
+  const heeftDezeWeek = stories.some(s => s.week_number === weekNr && s.year === jaar)
+
+  const MOODS = ['😴', '😐', '🙂', '😎', '🔥']
+  const VRAGEN = [
+    { type: 'mood', vraag: 'Hoe was je stageweek?', emoji: '✨' },
+    { type: 'tekst', vraag: 'Wat is het tofste dat je deze week hebt gedaan?', emoji: '🏆', key: 'a1', placeholder: 'Bijv. zelf een bug opgelost...' },
+    { type: 'tekst', vraag: 'Waar liep je tegenaan?', emoji: '🧗', key: 'a2', placeholder: 'Iets wat lastig was of niet lukte...' },
+    { type: 'tekst', vraag: 'Wat wil je volgende week anders aanpakken?', emoji: '🚀', key: 'a3', placeholder: 'Eén concrete actie voor volgende week...' },
+  ]
+
+  const stapGeldig = () => {
+    if (stap === 0) return antwoorden.mood !== ''
+    const key = VRAGEN[stap].key
+    return antwoorden[key]?.trim().length > 0
+  }
+
+  async function verzend() {
+    setBezig(true)
+    const supabase = createClient()
+    const { data, error } = await supabase.from('week_stories').insert({
+      school_id: profile.school_id,
+      student_id: profile.id,
+      placement_id: placement?.id,
+      week_number: weekNr,
+      year: jaar,
+      mood: antwoorden.mood,
+      answer_1: antwoorden.a1,
+      answer_2: antwoorden.a2,
+      answer_3: antwoorden.a3,
+      xp_awarded: 100,
+    }).select().single()
+
+    if (!error) {
+      // XP toekennen
+      await supabase.from('profiles').update({
+        xp: (profile.xp || 0) + 100,
+        streak: (profile.streak || 0) + 1,
+        last_story_week: weekNr,
+        last_story_year: jaar,
+      }).eq('id', profile.id)
+
+      setStories(prev => [data, ...prev])
+      setXpPop(true)
+      setTimeout(() => { setXpPop(false); setKlaar(true) }, 1500)
+    }
+    setBezig(false)
+  }
+
+  if (heeftDezeWeek || klaar) return (
+    <div>
+      {klaar && (
+        <div style={{ ...S.card, textAlign: 'center', padding: 40, background: 'linear-gradient(135deg, rgba(74,222,128,.1), rgba(242,107,29,.1))' }}>
+          <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
+          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 22, fontWeight: 800, marginBottom: 8 }}>+100 XP!</div>
+          <div style={{ fontSize: 14, color: DARK.sub }}>Weekstory ingevuld · streak gaat door 🔥</div>
+        </div>
+      )}
+      <div style={S.card}>
+        <div style={S.label}>Eerdere weken</div>
+        {stories.map(s => (
+          <div key={s.id} style={{ borderBottom: `1px solid ${DARK.border}`, paddingBottom: 12, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Week {s.week_number}</span>
+              <span style={{ fontSize: 20 }}>{s.mood}</span>
+            </div>
+            {s.answer_1 && <div style={{ fontSize: 13, color: DARK.sub, lineHeight: 1.5 }}>🏆 {s.answer_1}</div>}
+          </div>
+        ))}
+        {stories.length === 0 && <div style={{ color: DARK.sub, fontSize: 13 }}>Nog geen stories</div>}
+      </div>
+    </div>
+  )
+
+  const huidigeVraag = VRAGEN[stap]
+
+  return (
+    <div>
+      {xpPop && (
+        <div style={{ position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', fontFamily: 'Sora,sans-serif', fontSize: '2.5rem', fontWeight: 800, color: DARK.green, zIndex: 300, textShadow: '0 4px 20px rgba(74,222,128,.5)', animation: 'fadeUp 1.5s ease forwards', pointerEvents: 'none' }}>
+          +100 XP ⚡
+        </div>
+      )}
+      <style>{`@keyframes fadeUp{0%{opacity:0;transform:translate(-50%,-30%)}25%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}`}</style>
+
+      <div style={{ ...S.card, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+        {/* Voortgang */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+          {VRAGEN.map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i <= stap ? DARK.orange : 'rgba(255,255,255,.1)' }} />
+          ))}
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: 24, flex: 1 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>{huidigeVraag.emoji}</div>
+          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, fontWeight: 700, marginBottom: 20, lineHeight: 1.4 }}>
+            {huidigeVraag.vraag}
+          </div>
+
+          {huidigeVraag.type === 'mood' ? (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
+              {MOODS.map(m => (
+                <button key={m} onClick={() => setAntwoorden(prev => ({ ...prev, mood: m }))} style={{ fontSize: 36, background: antwoorden.mood === m ? 'rgba(242,107,29,.2)' : 'rgba(255,255,255,.05)', border: antwoorden.mood === m ? `2px solid ${DARK.orange}` : '2px solid transparent', borderRadius: 16, padding: '10px 14px', cursor: 'pointer', transform: antwoorden.mood === m ? 'scale(1.15)' : 'scale(1)', transition: 'all .15s' }}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              value={antwoorden[huidigeVraag.key]}
+              onChange={e => setAntwoorden(prev => ({ ...prev, [huidigeVraag.key]: e.target.value }))}
+              placeholder={huidigeVraag.placeholder}
+              rows={4}
+              style={{ width: '100%', padding: '14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 12, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none', resize: 'none', textAlign: 'left' }}
+            />
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          {stap > 0 && (
+            <button onClick={() => setStap(s => s - 1)} style={{ padding: '13px 20px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 99, color: DARK.sub, fontWeight: 700, cursor: 'pointer' }}>←</button>
+          )}
+          {stap < 3 ? (
+            <button onClick={() => { if (stapGeldig()) setStap(s => s + 1) }} disabled={!stapGeldig()} style={{ flex: 1, padding: '13px', background: stapGeldig() ? DARK.orange : 'rgba(255,255,255,.06)', border: 'none', borderRadius: 99, color: stapGeldig() ? '#fff' : DARK.sub, fontWeight: 700, fontSize: 15, cursor: stapGeldig() ? 'pointer' : 'not-allowed' }}>
+              Volgende →
+            </button>
+          ) : (
+            <button onClick={verzend} disabled={!stapGeldig() || bezig} style={{ flex: 1, padding: '13px', background: DARK.green, border: 'none', borderRadius: 99, color: '#0B0F14', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+              {bezig ? '⏳' : '✅ Verzenden +100 XP'}
+            </button>
+          )}
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: DARK.sub }}>
+          Week {weekNr} · 4 swipes en je bent klaar 🔥
+        </div>
+      </div>
+
+      {stories.length > 0 && (
+        <div style={S.card}>
+          <div style={S.label}>Eerdere weken</div>
+          {stories.slice(0, 3).map(s => (
+            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${DARK.border}` }}>
+              <span style={{ fontSize: 13, color: DARK.sub }}>Week {s.week_number}</span>
+              <span style={{ fontSize: 20 }}>{s.mood}</span>
+              <span style={{ fontSize: 11, color: DARK.green, fontWeight: 700 }}>+100 XP</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// HOOFD COMPONENT
+// ============================================================
+export default function StudentDashboard() {
+  const router = useRouter()
+  const [profile, setProfile] = useState(null)
+  const [placement, setPlacement] = useState(null)
+  const [badges, setBadges] = useState([])
+  const [studentBadges, setStudentBadges] = useState([])
+  const [uren, setUren] = useState([])
+  const [opdrachten, setOpdrachten] = useState([])
+  const [inleveringen, setInleveringen] = useState([])
+  const [stories, setStories] = useState([])
+  const [klassement, setKlassement] = useState([])
+  const [klasKlassement, setKlasKlassement] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('stage')
+
+  useEffect(() => {
+    const supabase = createClient()
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { router.replace('/login'); return }
+
+      const { data: prof } = await supabase
+        .from('profiles').select('*')
+        .eq('user_id', session.user.id).limit(1).maybeSingle()
+
+      if (!prof || prof.role !== 'student') { router.replace('/login'); return }
+      setProfile(prof)
+
+      const [
+        { data: pl },
+        { data: b },
+        { data: sb },
+        { data: u },
+        { data: a },
+        { data: ia },
+        { data: ws },
+        { data: kl },
+      ] = await Promise.all([
+        supabase.from('placements').select('*').eq('student_id', prof.id).eq('status', 'active').limit(1).maybeSingle(),
+        supabase.from('badges').select('*').eq('school_id', prof.school_id).order('sort_order'),
+        supabase.from('student_badges').select('*').eq('student_id', prof.id),
+        supabase.from('hours').select('*').eq('student_id', prof.id).order('date', { ascending: false }),
+        supabase.from('assignments').select('*').eq('school_id', prof.school_id).order('sort_order'),
+        supabase.from('student_assignments').select('*').eq('student_id', prof.id),
+        supabase.from('week_stories').select('*').eq('student_id', prof.id).order('created_at', { ascending: false }),
+        supabase.from('profiles').select('id,name,xp,streak,klas').eq('school_id', prof.school_id).eq('role', 'student'),
+      ])
+
+      setPlacement(pl)
+      setBadges(b ?? [])
+      setStudentBadges(sb ?? [])
+      setUren(u ?? [])
+      setOpdrachten(a ?? [])
+      setInleveringen(ia ?? [])
+      setStories(ws ?? [])
+      setKlassement(kl ?? [])
+      setKlasKlassement((kl ?? []).filter(s => s.klas === prof.klas))
+      setLoading(false)
+    }
+    load()
+  }, [router])
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: DARK.bg }}>
+      <div style={{ width: 40, height: 40, border: '3px solid rgba(255,255,255,.1)', borderTop: `3px solid ${DARK.orange}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+
+  const TABS = [
+    { key: 'stage', label: '🧭', sub: 'Mijn stage' },
+    { key: 'uren', label: '⏱', sub: 'Uren' },
+    { key: 'opdrachten', label: '📁', sub: 'Opdrachten' },
+    { key: 'story', label: '✨', sub: 'Weekstory' },
+  ]
+
+  return (
+    <div style={S.page}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=Inter:wght@400;500;600;700&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        input,textarea,select{color-scheme:dark}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:99px}
+      `}</style>
+
+      {/* Header */}
+      <div style={{ background: DARK.card, borderBottom: `1px solid ${DARK.border}`, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ fontFamily: 'Sora,sans-serif', fontWeight: 800, fontSize: 17, color: DARK.orange }}>Stagepoort</div>
+        <div style={{ fontSize: 12, color: DARK.sub }}>{profile?.name} · {profile?.klas}</div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: '16px 16px 0' }}>
+        {tab === 'stage' && <MijnStageTab profile={profile} placement={placement} badges={badges} studentBadges={studentBadges} klassement={klassement} klasKlassement={klasKlassement} uren={uren} />}
+        {tab === 'uren' && <UrenTab profile={profile} placement={placement} uren={uren} setUren={setUren} />}
+        {tab === 'opdrachten' && <OpdrachtenTab profile={profile} placement={placement} opdrachten={opdrachten} inleveringen={inleveringen} setInleveringen={setInleveringen} />}
+        {tab === 'story' && <WeekstoryTab profile={profile} placement={placement} stories={stories} setStories={setStories} />}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: DARK.card, borderTop: `1px solid ${DARK.border}`, display: 'flex', padding: '8px 0 12px' }}>
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}>
+            <span style={{ fontSize: 22 }}>{t.label}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: tab === t.key ? DARK.orange : DARK.sub }}>{t.sub}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
