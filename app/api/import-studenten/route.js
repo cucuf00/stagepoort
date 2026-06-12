@@ -35,10 +35,9 @@ export async function POST(request) {
       let studentId = bestaand?.id
 
       if (!studentId) {
-        // Maak nieuw profiel aan
+        // Maak profiel aan zonder user_id (wordt gekoppeld als student inlogt)
         const { data: nieuw, error: profErr } = await supabase
           .from('profiles').insert({
-            user_id: crypto.randomUUID(),
             school_id: prof.school_id,
             name: ll.naam,
             email: ll.email,
