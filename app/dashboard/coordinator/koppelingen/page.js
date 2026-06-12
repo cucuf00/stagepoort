@@ -223,18 +223,24 @@ export default function KoppelingenPage() {
   }
 
   async function keurGoed(placementId) {
-    const supabase = createClient()
     setBezig(prev => ({ ...prev, [placementId]: true }))
-    const { error } = await supabase.from('placements').update({
-      status: 'active',
-      approved_at: new Date().toISOString(),
-    }).eq('id', placementId)
-
-    if (!error) {
-      showToast('✅ Koppeling goedgekeurd! Begeleider krijgt automatisch een e-mail.')
-      await loadData()
-      setUitgeklapt(null)
-    } else showToast('❌ ' + error.message, false)
+    try {
+      const res = await fetch('/api/send-supervisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placementId }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast('✅ Goedgekeurd! Stagebegeleider ontvangt automatisch een e-mail.')
+        await loadData()
+        setUitgeklapt(null)
+      } else {
+        showToast('❌ ' + (data.error || 'Goedkeuren mislukt'), false)
+      }
+    } catch (err) {
+      showToast('❌ ' + err.message, false)
+    }
     setBezig(prev => ({ ...prev, [placementId]: false }))
   }
 
