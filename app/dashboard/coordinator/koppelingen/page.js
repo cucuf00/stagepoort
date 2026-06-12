@@ -216,32 +216,42 @@ export default function KoppelingenPage() {
     setPlakBezig(false)
   }
 
-  async function stuurInvullink(placementId, studentId) {
-    const supabase = createClient()
+  async function stuurInvullink(placementId) {
     setBezig(prev => ({ ...prev, [placementId]: true }))
-    const { error } = await supabase.from('placements').update({
-      status: 'invited',
-      invited_at: new Date().toISOString(),
-    }).eq('id', placementId)
-
-    if (!error) {
-      const link = `${window.location.origin}/intake/${placementId}`
-      showToast(`📨 Invullink verstuurd! Link: ${link}`)
-      await loadData()
-    } else showToast('❌ ' + error.message, false)
+    try {
+      const res = await fetch('/api/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placementId }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast('📨 Invullink verstuurd per email!')
+        await loadData()
+      } else {
+        showToast('❌ ' + (data.error || 'Versturen mislukt'), false)
+      }
+    } catch (err) {
+      showToast('❌ ' + err.message, false)
+    }
     setBezig(prev => ({ ...prev, [placementId]: false }))
   }
 
   async function stuurAlleLinks() {
-    const supabase = createClient()
     const pending = placements.filter(p => p.status === 'pending' || p.status === 'rejected')
+    let verstuurd = 0
     for (const p of pending) {
-      await supabase.from('placements').update({
-        status: 'invited',
-        invited_at: new Date().toISOString(),
-      }).eq('id', p.id)
+      try {
+        const res = await fetch('/api/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ placementId: p.id }),
+        })
+        const data = await res.json()
+        if (data.success) verstuurd++
+      } catch {}
     }
-    showToast(`📨 ${pending.length} invullinks verstuurd!`)
+    showToast(`📨 ${verstuurd} van ${pending.length} invullinks verstuurd!`)
     await loadData()
   }
 
