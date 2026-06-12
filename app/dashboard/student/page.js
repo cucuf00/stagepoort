@@ -334,7 +334,7 @@ function UrenTab({ profile, placement, uren, setUren }) {
 // ============================================================
 // OPDRACHTEN TAB
 // ============================================================
-function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleveringen }) {
+function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleveringen, setProfile }) {
   const [actief, setActief] = useState(null)
   const [antwoord, setAntwoord] = useState('')
   const [bezig, setBezig] = useState(false)
@@ -343,6 +343,9 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
     if (!antwoord.trim()) return
     setBezig(true)
     const supabase = createClient()
+    const opdracht = opdrachten.find(o => o.id === assignmentId)
+    const xpBeloning = opdracht?.xp_reward || 100
+
     const { data, error } = await supabase.from('student_assignments').upsert({
       school_id: profile.school_id,
       assignment_id: assignmentId,
@@ -354,6 +357,11 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
     }, { onConflict: 'assignment_id,student_id' }).select().single()
 
     if (!error) {
+      // XP toekennen
+      const nieuweXP = (profile.xp || 0) + xpBeloning
+      const nieuweLevel = Math.floor(nieuweXP / 300) + 1
+      await supabase.from('profiles').update({ xp: nieuweXP, level: nieuweLevel }).eq('id', profile.id)
+      setProfile(prev => ({ ...prev, xp: nieuweXP, level: nieuweLevel }))
       setInleveringen(prev => [...prev.filter(i => i.assignment_id !== assignmentId), data])
       setActief(null)
       setAntwoord('')
@@ -419,7 +427,7 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
 // ============================================================
 // WEEKSTORY TAB
 // ============================================================
-function WeekstoryTab({ profile, placement, stories, setStories }) {
+function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
   const [stap, setStap] = useState(0)
   const [antwoorden, setAntwoorden] = useState({ mood: '', a1: '', a2: '', a3: '' })
   const [bezig, setBezig] = useState(false)
@@ -460,13 +468,21 @@ function WeekstoryTab({ profile, placement, stories, setStories }) {
     }).select().single()
 
     if (!error) {
-      // XP toekennen
+      // XP toekennen in database
+      const nieuweXP = (profile.xp || 0) + 100
+      const nieuweStreak = (profile.streak || 0) + 1
+      const nieuweLevel = Math.floor(nieuweXP / 300) + 1
+
       await supabase.from('profiles').update({
-        xp: (profile.xp || 0) + 100,
-        streak: (profile.streak || 0) + 1,
+        xp: nieuweXP,
+        streak: nieuweStreak,
+        level: nieuweLevel,
         last_story_week: weekNr,
         last_story_year: jaar,
       }).eq('id', profile.id)
+
+      // Update lokale state zodat XP direct zichtbaar is
+      setProfile(prev => ({ ...prev, xp: nieuweXP, streak: nieuweStreak, level: nieuweLevel }))
 
       setStories(prev => [data, ...prev])
       setXpPop(true)
@@ -621,7 +637,7 @@ export default function StudentDashboard() {
         { data: ws },
         { data: kl },
       ] = await Promise.all([
-        supabase.from('placements').select('*').eq('student_id', prof.id).eq('status', 'active').limit(1).maybeSingle(),
+        supabase.from('placements').select('*').eq('student_id', prof.id).not('status', 'in', '("cancelled","completed")').order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('badges').select('*').eq('school_id', prof.school_id).order('sort_order'),
         supabase.from('student_badges').select('*').eq('student_id', prof.id),
         supabase.from('hours').select('*').eq('student_id', prof.id).order('date', { ascending: false }),
@@ -678,8 +694,8 @@ export default function StudentDashboard() {
       <div style={{ padding: '16px 16px 0' }}>
         {tab === 'stage' && <MijnStageTab profile={profile} placement={placement} badges={badges} studentBadges={studentBadges} klassement={klassement} klasKlassement={klasKlassement} uren={uren} />}
         {tab === 'uren' && <UrenTab profile={profile} placement={placement} uren={uren} setUren={setUren} />}
-        {tab === 'opdrachten' && <OpdrachtenTab profile={profile} placement={placement} opdrachten={opdrachten} inleveringen={inleveringen} setInleveringen={setInleveringen} />}
-        {tab === 'story' && <WeekstoryTab profile={profile} placement={placement} stories={stories} setStories={setStories} />}
+        {tab === 'opdrachten' && <OpdrachtenTab profile={profile} placement={placement} opdrachten={opdrachten} inleveringen={inleveringen} setInleveringen={setInleveringen} setProfile={setProfile} />}
+        {tab === 'story' && <WeekstoryTab profile={profile} placement={placement} stories={stories} setStories={setStories} setProfile={setProfile} />}
       </div>
 
       {/* Bottom nav */}
