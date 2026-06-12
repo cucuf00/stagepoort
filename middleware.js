@@ -21,10 +21,9 @@ export async function middleware(request) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Altijd doorlaten: login, auth callback, static files
+  // Altijd doorlaten
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
@@ -34,8 +33,17 @@ export async function middleware(request) {
     return supabaseResponse
   }
 
-  // Niet ingelogd → naar login
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user
+    console.log(`[middleware] path=${pathname} user=${user?.email ?? 'none'}`)
+  } catch (err) {
+    console.error(`[middleware] getUser fout:`, err.message)
+  }
+
   if (!user) {
+    console.log(`[middleware] Geen sessie → redirect naar /login`)
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
