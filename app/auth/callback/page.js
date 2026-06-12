@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function AuthCallback() {
+function AuthCallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState('Inloggen...')
@@ -106,5 +106,17 @@ export default function AuthCallback() {
       <p style={{ color: '#5C6B7A', fontSize: 14 }}>{status}</p>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
+  )
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F3EE' }}>
+        <p style={{ color: '#5C6B7A', fontFamily: 'Inter, sans-serif', fontSize: 14 }}>Laden...</p>
+      </div>
+    }>
+      <AuthCallbackInner />
+    </Suspense>
   )
 }
