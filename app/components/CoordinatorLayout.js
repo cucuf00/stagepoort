@@ -20,6 +20,7 @@ export default function CoordinatorLayout({ children, profile }) {
   const navItems = [
     { href: '/dashboard/coordinator', label: '📊 Dashboard', sectie: 'main' },
     { href: '/dashboard/coordinator/koppelingen', label: '🔗 Koppelingen', sectie: 'main' },
+    { href: '/dashboard/coordinator/beoordelen', label: '✅ Beoordelen', sectie: 'main' },
     { href: '/dashboard/coordinator/opdrachten', label: '📋 Opdrachten', sectie: 'main' },
     { href: '/dashboard/coordinator/beheer', label: '⚙️ Beheer', sectie: 'beheer' },
     { href: '#', label: '📅 Schooljaren', sectie: 'beheer' },
