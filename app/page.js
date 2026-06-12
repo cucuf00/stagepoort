@@ -1,25 +1,67 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
-export default async function Home() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function Home() {
+  const router = useRouter()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .not('school_id', 'is', null)
-    .single()
+  useEffect(() => {
+    const supabase = createClient()
 
-  const roleRoutes = {
-    coordinator: '/dashboard/coordinator',
-    student:     '/dashboard/student',
-    coach:       '/dashboard/coach',
-    company:     '/dashboard/company',
-    super_admin: '/dashboard/admin',
-  }
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
 
-  redirect(roleRoutes[profile?.role] || '/login')
+      if (!session) {
+        router.replace('/login')
+        return
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      const roleRoutes = {
+        coordinator: '/dashboard/coordinator',
+        student:     '/dashboard/student',
+        coach:       '/dashboard/coach',
+        company:     '/dashboard/company',
+        super_admin: '/dashboard/admin',
+      }
+
+      router.replace(roleRoutes[profile?.role] ?? '/dashboard/coordinator')
+    }
+
+    // Luister ook naar auth state changes (na magic link redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        checkSession()
+      } else if (event === 'SIGNED_OUT') {
+        router.replace('/login')
+      }
+    })
+
+    checkSession()
+
+    return () => subscription.unsubscribe()
+  }, [router])
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#F7F3EE',
+      fontFamily: 'Inter, sans-serif',
+      color: '#5C6B7A',
+      fontSize: 14
+    }}>
+      Laden...
+    </div>
+  )
 }
