@@ -21,7 +21,7 @@ export default function CoordinatorLayout({ children, profile }) {
     { href: '/dashboard/coordinator', label: '📊 Dashboard', sectie: 'main' },
     { href: '/dashboard/coordinator/studenten', label: '👥 Studenten', sectie: 'main' },
     { href: '/dashboard/coordinator/koppelingen', label: '🔗 Koppelingen', sectie: 'main' },
-    { href: '#', label: '📋 Opdrachten', sectie: 'main' },
+    { href: '/dashboard/coordinator/opdrachten', label: '📋 Opdrachten', sectie: 'main' },
     { href: '/dashboard/coordinator/beheer', label: '⚙️ Beheer', sectie: 'beheer' },
     { href: '#', label: '📅 Schooljaren', sectie: 'beheer' },
   ]
