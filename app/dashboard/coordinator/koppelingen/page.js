@@ -62,7 +62,40 @@ export default function KoppelingenPage() {
   const [afwijsReden, setAfwijsReden] = useState({})
   const [showAfwijs, setShowAfwijs] = useState(null)
   const [csvBezig, setCsvBezig] = useState(false)
+  const [plakTekst, setPlakTekst] = useState('')
+  const [plakPreview, setPlakPreview] = useState([])
+  const [plakBezig, setPlakBezig] = useState(false)
   const csvRef = useRef()
+
+  // Parseer geplakte tekst naar leerlingen — herkent tab, komma, puntkomma
+  function parseerPlakTekst(tekst) {
+    const regels = tekst.trim().split('\n').filter(r => r.trim())
+    if (regels.length === 0) return []
+
+    // Detecteer scheidingsteken
+    const eersteRegel = regels[0]
+    const scheidingsteken = eersteRegel.includes('\t') ? '\t'
+      : eersteRegel.includes(';') ? ';'
+      : ','
+
+    // Sla header over als die er is
+    const start = regels[0].toLowerCase().includes('naam') ||
+                  regels[0].toLowerCase().includes('name') ? 1 : 0
+
+    return regels.slice(start).map(r => {
+      const cols = r.split(scheidingsteken).map(c => c.trim().replace(/^"|"$/g, ''))
+      // Zoek email kolom automatisch
+      const emailIdx = cols.findIndex(c => c.includes('@'))
+      const naamIdx = emailIdx === 0 ? 1 : 0
+      const klasIdx = cols.findIndex((c, i) => i !== emailIdx && i !== naamIdx && c.length > 0)
+
+      return {
+        naam: cols[naamIdx] || '',
+        email: emailIdx >= 0 ? cols[emailIdx] : '',
+        klas: klasIdx >= 0 ? cols[klasIdx] : '',
+      }
+    }).filter(l => l.naam && l.email && l.email.includes('@'))
+  }
 
 
 
@@ -96,33 +129,12 @@ export default function KoppelingenPage() {
   }
 
   // CSV Import
-  async function handleCSV(e) {
+  async function verwerkLeerlingen(leerlingen) {
     const supabase = createClient()
-    const file = e.target.files[0]
-    if (!file) return
-    setCsvBezig(true)
-
-    const text = await file.text()
-    const regels = text.trim().split('\n').filter(r => r.trim())
-
-    // Sla eerste rij over als het een header is
-    const start = regels[0].toLowerCase().includes('naam') ? 1 : 0
-    const leerlingen = regels.slice(start).map(r => {
-      const cols = r.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-      return { naam: cols[0], email: cols[1], klas: cols[2] }
-    }).filter(l => l.naam && l.email)
-
-    if (leerlingen.length === 0) {
-      showToast('❌ Geen geldige leerlingen gevonden in CSV', false)
-      setCsvBezig(false)
-      return
-    }
-
     let aangemaakt = 0
     let overgeslagen = 0
 
     for (const ll of leerlingen) {
-      // Check of student al bestaat
       const { data: bestaand } = await supabase
         .from('profiles').select('id')
         .eq('school_id', profile.school_id)
@@ -132,8 +144,6 @@ export default function KoppelingenPage() {
       let studentId = bestaand?.id
 
       if (!studentId) {
-        // Maak tijdelijk profiel aan zonder echte auth user
-        // Wordt gekoppeld zodra student voor het eerst inlogt
         const tempUserId = crypto.randomUUID()
         const { data: nieuwProfiel } = await supabase
           .from('profiles').insert({
@@ -145,15 +155,11 @@ export default function KoppelingenPage() {
           }).select('id').single()
         studentId = nieuwProfiel?.id
       } else {
-        // Update klas als die er is
-        if (ll.klas) {
-          await supabase.from('profiles').update({ klas: ll.klas, name: ll.naam }).eq('id', bestaand.id)
-        }
+        if (ll.klas) await supabase.from('profiles').update({ klas: ll.klas, name: ll.naam }).eq('id', bestaand.id)
       }
 
       if (!studentId) { overgeslagen++; continue }
 
-      // Check of er al een actieve placement is
       const { data: bestaandePlacement } = await supabase
         .from('placements').select('id')
         .eq('student_id', studentId)
@@ -162,7 +168,6 @@ export default function KoppelingenPage() {
 
       if (bestaandePlacement) { overgeslagen++; continue }
 
-      // Maak placement aan met status pending
       const { error } = await supabase.from('placements').insert({
         school_id: profile.school_id,
         student_id: studentId,
@@ -176,8 +181,39 @@ export default function KoppelingenPage() {
 
     await loadData()
     showToast(`✅ ${aangemaakt} leerlingen toegevoegd${overgeslagen > 0 ? `, ${overgeslagen} overgeslagen` : ''}`)
+  }
+
+  async function handleCSV(e) {
+    const supabase = createClient()
+    const file = e.target.files[0]
+    if (!file) return
+    setCsvBezig(true)
+    const text = await file.text()
+    const regels = text.trim().split('\n').filter(r => r.trim())
+    const start = regels[0].toLowerCase().includes('naam') ? 1 : 0
+    const leerlingen = regels.slice(start).map(r => {
+      const cols = r.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+      return { naam: cols[0], email: cols[1], klas: cols[2] }
+    }).filter(l => l.naam && l.email)
+
+    if (leerlingen.length === 0) {
+      showToast('❌ Geen geldige leerlingen gevonden', false)
+      setCsvBezig(false)
+      return
+    }
+    await verwerkLeerlingen(leerlingen)
     setCsvBezig(false)
     csvRef.current.value = ''
+  }
+
+  async function handlePlakImport() {
+    const leerlingen = plakPreview
+    if (leerlingen.length === 0) return
+    setPlakBezig(true)
+    await verwerkLeerlingen(leerlingen)
+    setPlakTekst('')
+    setPlakPreview([])
+    setPlakBezig(false)
   }
 
   async function stuurInvullink(placementId, studentId) {
@@ -401,32 +437,92 @@ export default function KoppelingenPage() {
           </p>
         </div>
 
-        {/* CSV Import */}
+        {/* Import sectie */}
         <div style={{ background: '#fff', border: '1px solid #E4DDD4', borderRadius: 12, padding: 20, marginBottom: 20 }}>
-          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 15, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            📥 Leerlingen importeren via CSV
+          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            📥 Leerlingen importeren
           </div>
-          <p style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 14, lineHeight: 1.6 }}>
-            Upload een CSV-bestand met kolommen: <code style={{ background: '#F0EDE8', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>naam, email, klas</code>. 
-            Leerlingen verschijnen automatisch in "Link nog versturen".
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <input
-              ref={csvRef}
-              type="file"
-              accept=".csv"
-              onChange={handleCSV}
-              disabled={csvBezig}
-              style={{ display: 'none' }}
-              id="csvInput"
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            {['plakken', 'csv'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => { setPlakTekst(''); setPlakPreview([]) }}
+                style={{
+                  padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, border: '1.5px solid',
+                  background: tab === 'plakken' ? '#0E3A5C' : '#fff',
+                  borderColor: tab === 'plakken' ? '#0E3A5C' : '#E4DDD4',
+                  color: tab === 'plakken' ? '#fff' : '#5C6B7A',
+                  cursor: 'pointer',
+                }}
+              >
+                {tab === 'plakken' ? '📋 Kopiëren & plakken' : '📂 CSV uploaden'}
+              </button>
+            ))}
+          </div>
+
+          {/* Plak tekstvak */}
+          <div>
+            <p style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 10, lineHeight: 1.6 }}>
+              Kopieer leerlingen uit Excel of een lijst en plak ze hier. Het systeem herkent automatisch naam, e-mail en klas — ongeacht de volgorde of het scheidingsteken (tab, komma, puntkomma).
+            </p>
+            <textarea
+              value={plakTekst}
+              onChange={e => {
+                setPlakTekst(e.target.value)
+                setPlakPreview(parseerPlakTekst(e.target.value))
+              }}
+              placeholder={'Yusuf Demir\ty.demir@student.nl\tSD4B\nLisa de Boer\tl.boer@student.nl\tSD4A\n...'}
+              style={{
+                width: '100%', minHeight: 120, padding: '10px 12px',
+                border: '1.5px solid #E4DDD4', borderRadius: 10,
+                fontFamily: 'monospace', fontSize: 12, color: '#1A2633',
+                resize: 'vertical', outline: 'none', lineHeight: 1.6,
+              }}
             />
-            <label
-              htmlFor="csvInput"
-              style={{ padding: '9px 18px', background: '#0E3A5C', borderRadius: 10, color: '#fff', fontWeight: 600, fontSize: 13, cursor: csvBezig ? 'not-allowed' : 'pointer', opacity: csvBezig ? .6 : 1, display: 'inline-flex', alignItems: 'center', gap: 8 }}
-            >
-              {csvBezig ? '⏳ Bezig...' : '📂 CSV uploaden'}
-            </label>
-            <span style={{ fontSize: 12, color: '#5C6B7A' }}>Ondersteunde formaten: .csv (UTF-8)</span>
+
+            {/* Preview */}
+            {plakPreview.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#5C6B7A', marginBottom: 8 }}>
+                  Gevonden: {plakPreview.length} leerling{plakPreview.length > 1 ? 'en' : ''}
+                </div>
+                <div style={{ background: '#F7F3EE', borderRadius: 8, overflow: 'hidden', border: '1px solid #E4DDD4', maxHeight: 200, overflowY: 'auto' }}>
+                  {plakPreview.map((l, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 12, padding: '8px 12px', borderBottom: i < plakPreview.length - 1 ? '1px solid #E4DDD4' : 'none', fontSize: 13 }}>
+                      <div style={{ fontWeight: 600 }}>{l.naam}</div>
+                      <div style={{ color: '#5C6B7A' }}>{l.email}</div>
+                      <div><Badge kleur="blauw">{l.klas || '—'}</Badge></div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button
+                    onClick={handlePlakImport}
+                    disabled={plakBezig}
+                    style={{ padding: '9px 20px', background: '#F26B1D', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: plakBezig ? .6 : 1 }}
+                  >
+                    {plakBezig ? '⏳ Importeren...' : `✅ Importeer ${plakPreview.length} leerling${plakPreview.length > 1 ? 'en' : ''}`}
+                  </button>
+                  <button
+                    onClick={() => { setPlakTekst(''); setPlakPreview([]) }}
+                    style={{ padding: '9px 16px', background: '#F0EDE8', border: 'none', borderRadius: 10, color: '#5C6B7A', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                  >
+                    Wissen
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* CSV upload optie */}
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #E4DDD4', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: '#5C6B7A' }}>Of upload een .csv bestand:</span>
+              <input ref={csvRef} type="file" accept=".csv" onChange={handleCSV} disabled={csvBezig} style={{ display: 'none' }} id="csvInput" />
+              <label htmlFor="csvInput" style={{ padding: '6px 14px', background: '#E8F0F6', borderRadius: 8, color: '#0E3A5C', fontWeight: 600, fontSize: 12, cursor: csvBezig ? 'not-allowed' : 'pointer', opacity: csvBezig ? .6 : 1 }}>
+                {csvBezig ? '⏳ Bezig...' : '📂 CSV uploaden'}
+              </label>
+            </div>
           </div>
         </div>
 
