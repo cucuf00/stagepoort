@@ -1,5 +1,4 @@
 'use client'
-import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -10,7 +9,12 @@ export default function CoordinatorLayout({ children, profile }) {
   async function handleLogout() {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.replace('/login')
+    window.location.href = '/login'
+  }
+
+  function navigate(href) {
+    if (href === '#') return
+    window.location.href = href
   }
 
   const navItems = [
@@ -25,13 +29,18 @@ export default function CoordinatorLayout({ children, profile }) {
   const NavLink = ({ item }) => {
     const active = pathname === item.href && item.href !== '#'
     return (
-      <Link href={item.href} style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
-        color: active ? '#fff' : 'rgba(255,255,255,.6)',
-        fontSize: 14, fontWeight: 500, textDecoration: 'none',
-        borderLeft: active ? '3px solid #F26B1D' : '3px solid transparent',
-        background: active ? 'rgba(242,107,29,.18)' : 'transparent',
-      }}>{item.label}</Link>
+      <button
+        onClick={() => navigate(item.href)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
+          color: active ? '#fff' : 'rgba(255,255,255,.6)',
+          fontSize: 14, fontWeight: 500, textDecoration: 'none',
+          borderLeft: active ? '3px solid #F26B1D' : '3px solid transparent',
+          background: active ? 'rgba(242,107,29,.18)' : 'transparent',
+          border: 'none', cursor: item.href === '#' ? 'default' : 'pointer',
+          width: '100%', textAlign: 'left',
+          opacity: item.href === '#' ? 0.4 : 1,
+        }}>{item.label}</button>
     )
   }
 
@@ -65,7 +74,10 @@ export default function CoordinatorLayout({ children, profile }) {
             {navItems.filter(i => i.sectie === 'beheer').map(item => <NavLink key={item.label} item={item} />)}
             <div style={{ flex: 1 }} />
             <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,.1)' }}>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', marginBottom: 10 }}>Ingelogd als<br/><strong style={{color:'rgba(255,255,255,.7)'}}>{profile?.name}</strong></div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', marginBottom: 10 }}>
+                Ingelogd als<br/>
+                <strong style={{ color: 'rgba(255,255,255,.7)' }}>{profile?.name}</strong>
+              </div>
               <button onClick={handleLogout} style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
                 color: '#ff9999', fontSize: 13, fontWeight: 600,
