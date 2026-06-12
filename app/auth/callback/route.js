@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
 
   if (code) {
     const supabase = await createClient()
@@ -14,13 +13,24 @@ export async function GET(request) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        // Haal profiel op
+        // Haal het eerste profiel op van deze user
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, school_id')
+          .select('role, school_id, id')
           .eq('user_id', user.id)
-          .not('school_id', 'is', null)
+          .order('created_at', { ascending: true })
+          .limit(1)
           .maybeSingle()
+
+        // Schrijf school_id weg in user metadata zodat get_my_school_id() werkt
+        if (profile?.school_id) {
+          await supabase.auth.updateUser({
+            data: { 
+              current_school_id: profile.school_id,
+              role: profile.role
+            }
+          })
+        }
 
         const roleRoutes = {
           coordinator: '/dashboard/coordinator',
@@ -30,18 +40,15 @@ export async function GET(request) {
           super_admin: '/dashboard/admin',
         }
 
-        const route = profile?.role ? (roleRoutes[profile.role] ?? '/dashboard/coordinator') : '/dashboard/coordinator'
-        
+        const route = profile?.role 
+          ? (roleRoutes[profile.role] ?? '/dashboard/coordinator') 
+          : '/dashboard/coordinator'
+
         const forwardedHost = request.headers.get('x-forwarded-host')
-        const isLocalEnv = process.env.NODE_ENV === 'development'
-        
-        if (isLocalEnv) {
-          return NextResponse.redirect(`${origin}${route}`)
-        } else if (forwardedHost) {
+        if (forwardedHost) {
           return NextResponse.redirect(`https://${forwardedHost}${route}`)
-        } else {
-          return NextResponse.redirect(`${origin}${route}`)
         }
+        return NextResponse.redirect(`${origin}${route}`)
       }
     }
   }
