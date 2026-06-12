@@ -29,7 +29,7 @@ export async function POST(request) {
     const intakeLink = `${process.env.NEXT_PUBLIC_SITE_URL}/intake/${placementId}`
 
     if (!student?.email) {
-      return Response.json({ error: 'Student heeft geen e-mailadres' }, { status: 400 })
+      return Response.json({ error: `Student heeft geen e-mailadres (${student?.name})` }, { status: 400 })
     }
 
     // Stuur email naar student

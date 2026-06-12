@@ -135,8 +135,10 @@ export default function KoppelingenPage() {
     let overgeslagen = 0
 
     for (const ll of leerlingen) {
+      // Check of student al bestaat op email
       const { data: bestaand } = await supabase
-        .from('profiles').select('id')
+        .from('profiles')
+        .select('id')
         .eq('school_id', profile.school_id)
         .eq('email', ll.email)
         .maybeSingle()
@@ -144,22 +146,32 @@ export default function KoppelingenPage() {
       let studentId = bestaand?.id
 
       if (!studentId) {
+        // Nieuw profiel aanmaken
         const tempUserId = crypto.randomUUID()
-        const { data: nieuwProfiel } = await supabase
+        const { data: nieuwProfiel, error: profErr } = await supabase
           .from('profiles').insert({
             user_id: tempUserId,
             school_id: profile.school_id,
             name: ll.naam,
+            email: ll.email,
             role: 'student',
             klas: ll.klas || null,
-          }).select('id').single()
+          }).select('id').maybeSingle()
+
+        if (profErr) { console.error('Profiel aanmaken fout:', profErr.message); overgeslagen++; continue }
         studentId = nieuwProfiel?.id
       } else {
-        if (ll.klas) await supabase.from('profiles').update({ klas: ll.klas, name: ll.naam }).eq('id', bestaand.id)
+        // Update bestaand profiel
+        await supabase.from('profiles').update({
+          name: ll.naam,
+          email: ll.email,
+          ...(ll.klas ? { klas: ll.klas } : {}),
+        }).eq('id', bestaand.id)
       }
 
       if (!studentId) { overgeslagen++; continue }
 
+      // Check of er al een actieve placement is
       const { data: bestaandePlacement } = await supabase
         .from('placements').select('id')
         .eq('student_id', studentId)
@@ -168,15 +180,16 @@ export default function KoppelingenPage() {
 
       if (bestaandePlacement) { overgeslagen++; continue }
 
-      const { error } = await supabase.from('placements').insert({
+      // Maak placement aan
+      const { error: plErr } = await supabase.from('placements').insert({
         school_id: profile.school_id,
         student_id: studentId,
         coordinator_id: profile.id,
         status: 'pending',
       })
 
-      if (!error) aangemaakt++
-      else overgeslagen++
+      if (!plErr) aangemaakt++
+      else { console.error('Placement fout:', plErr.message); overgeslagen++ }
     }
 
     await loadData()
