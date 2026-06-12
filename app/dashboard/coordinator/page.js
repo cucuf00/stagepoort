@@ -91,25 +91,68 @@ export default function CoordinatorDashboard() {
   }
 
   function openEdit(student) {
-    setEditForm({ name: student.name || '', email: student.email || '', klas: student.klas || '' })
+    const actievePl = placements.find(p => p.student_id === student.id && !['cancelled','completed'].includes(p.status))
+    setEditForm({
+      name: student.name || '',
+      email: student.email || '',
+      klas: student.klas || '',
+      period_id: actievePl?.period_id || '',
+    })
     setEditModal(student)
   }
 
   async function slaEditOp() {
     setEditBezig(true)
     const supabase = createClient()
+
+    // Profiel updaten
     const { error } = await supabase.from('profiles').update({
       name: editForm.name,
       email: editForm.email,
       klas: editForm.klas,
     }).eq('id', editModal.id)
 
-    if (!error) {
-      setStudenten(prev => prev.map(s => s.id === editModal.id ? { ...s, ...editForm } : s))
-      setEditModal(null)
-      showToast('✅ Leerling bijgewerkt!')
-    } else showToast('❌ ' + error.message, false)
+    if (error) { showToast('❌ ' + error.message, false); setEditBezig(false); return }
+
+    // Periode koppelen aan actieve placement
+    const actievePl = placements.find(p => p.student_id === editModal.id && !['cancelled','completed'].includes(p.status))
+    if (actievePl && editForm.period_id) {
+      await supabase.from('placements').update({ period_id: editForm.period_id || null }).eq('id', actievePl.id)
+      setPlacements(prev => prev.map(p => p.id === actievePl.id ? { ...p, period_id: editForm.period_id } : p))
+    }
+
+    setStudenten(prev => prev.map(s => s.id === editModal.id ? { ...s, name: editForm.name, email: editForm.email, klas: editForm.klas } : s))
+    setEditModal(null)
+    showToast('✅ Leerling bijgewerkt!')
     setEditBezig(false)
+  }
+
+  async function nieuwSchooljaar(student) {
+    // Huidige actieve placement afsluiten + nieuwe aanmaken
+    const supabase = createClient()
+    const actievePl = placements.find(p => p.student_id === student.id && !['cancelled','completed'].includes(p.status))
+
+    if (actievePl) {
+      await supabase.from('placements').update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      }).eq('id', actievePl.id)
+    }
+
+    const { data: nieuw, error } = await supabase.from('placements').insert({
+      school_id: profile.school_id,
+      student_id: student.id,
+      coordinator_id: profile.id,
+      status: 'pending',
+    }).select().single()
+
+    if (!error) {
+      setPlacements(prev => [
+        ...prev.map(p => p.id === actievePl?.id ? { ...p, status: 'completed' } : p),
+        nieuw
+      ])
+      showToast('🎓 Nieuw schooljaar gestart! Vergeet de klas aan te passen.')
+    } else showToast('❌ ' + error.message, false)
   }
 
   async function verwijderStudent(student) {
@@ -162,6 +205,10 @@ export default function CoordinatorDashboard() {
     if (zoek && !s.name?.toLowerCase().includes(zoek.toLowerCase()) && !s.email?.toLowerCase().includes(zoek.toLowerCase())) return false
     if (filterKlas !== 'alle' && s.klas !== filterKlas) return false
     if (filterStatus !== 'alle' && s._status !== filterStatus) return false
+    if (filterPeriode !== 'alle') {
+      const actievePl = placements.find(p => p.student_id === s.id && !['cancelled','completed'].includes(p.status))
+      if (!actievePl || actievePl.period_id !== filterPeriode) return false
+    }
     return true
   })
 
@@ -198,6 +245,14 @@ export default function CoordinatorDashboard() {
                   style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E4DDD4', borderRadius: 10, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none' }} />
               </div>
             ))}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#5C6B7A', marginBottom: 5 }}>Stageperiode</label>
+              <select value={editForm.period_id || ''} onChange={e => setEditForm(p => ({ ...p, period_id: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E4DDD4', borderRadius: 10, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none', background: '#fff' }}>
+                <option value="">— Nog niet gekoppeld —</option>
+                {periodes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
               <button onClick={slaEditOp} disabled={editBezig} style={{ flex: 1, padding: '12px', background: '#F26B1D', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                 {editBezig ? '⏳ Opslaan...' : '💾 Opslaan'}
@@ -366,6 +421,7 @@ export default function CoordinatorDashboard() {
                         {pl?.student_phone && <div style={{ fontSize: 12, marginTop: 4 }}>📞 {pl.student_phone}</div>}
                         <div style={{ fontSize: 12, marginTop: 2 }}>📧 {student.email || '—'}</div>
                         <div style={{ fontSize: 12, marginTop: 2 }}>📚 Klas: {student.klas || '—'}</div>
+                        {pl?.period_id && <div style={{ fontSize: 12, marginTop: 2 }}>📅 {periodes.find(p => p.id === pl.period_id)?.name || '—'}</div>}
                         {pl?.green_stage && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#1A7F52' }}>🌱 Groene stage</div>}
                       </div>
                       <div style={{ background: '#EAF1F6', borderRadius: 10, padding: 14 }}>
@@ -380,6 +436,42 @@ export default function CoordinatorDashboard() {
                           </>
                         ) : <div style={{ fontSize: 13, color: '#5C6B7A' }}>Nog niet gekoppeld</div>}
                       </div>
+                    </div>
+
+                    {/* Stagehistorie */}
+                    {(() => {
+                      const historie = placements.filter(p => p.student_id === student.id && p.status === 'completed')
+                      if (historie.length === 0) return null
+                      return (
+                        <div style={{ marginTop: 12, background: '#F0EDE8', borderRadius: 10, padding: 14 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: '#5C6B7A', marginBottom: 10 }}>📋 Eerdere stages</div>
+                          {historie.map(h => (
+                            <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '6px 0', borderBottom: '1px solid #E4DDD4' }}>
+                              <div>
+                                <span style={{ fontWeight: 600 }}>{h.company_name || 'Onbekend bedrijf'}</span>
+                                {periodes.find(p => p.id === h.period_id) && (
+                                  <span style={{ color: '#5C6B7A', marginLeft: 8 }}>· {periodes.find(p => p.id === h.period_id).name}</span>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                {h.final_grade && <span style={{ fontWeight: 700, color: h.final_grade >= 5.5 ? '#1A7F52' : '#C03020' }}>Cijfer: {h.final_grade}</span>}
+                                {h.green_stage && <span style={{ fontSize: 11, color: '#1A7F52', fontWeight: 700 }}>🌱</span>}
+                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#E2F4EC', color: '#1A7F52', fontWeight: 700 }}>Afgerond</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+
+                    {/* Nieuw schooljaar knop */}
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                      {pl && !['pending'].includes(pl.status) && (
+                        <button
+                          onClick={e => { e.stopPropagation(); if (window.confirm(`Nieuw schooljaar starten voor ${student.name}? De huidige stage wordt afgesloten en er wordt een nieuwe aangemaakt.`)) nieuwSchooljaar(student) }}
+                          style={{ padding: '7px 16px', background: '#0E3A5C', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                        >🎓 Nieuw schooljaar starten</button>
+                      )}
                     </div>
                   </div>
                 )}
