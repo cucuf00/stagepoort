@@ -23,7 +23,6 @@ export async function middleware(request) {
 
   const { pathname } = request.nextUrl
 
-  // Altijd doorlaten
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
@@ -33,17 +32,10 @@ export async function middleware(request) {
     return supabaseResponse
   }
 
-  let user = null
-  try {
-    const { data } = await supabase.auth.getUser()
-    user = data?.user
-    console.log(`[middleware] path=${pathname} user=${user?.email ?? 'none'}`)
-  } catch (err) {
-    console.error(`[middleware] getUser fout:`, err.message)
-  }
+  // Gebruik getSession ipv getUser — werkt beter met client-side cookies
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!user) {
-    console.log(`[middleware] Geen sessie → redirect naar /login`)
+  if (!session) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

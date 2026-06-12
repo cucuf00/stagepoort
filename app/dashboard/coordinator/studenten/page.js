@@ -1,26 +1,42 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import StudentenClient from './StudentenClient'
 
-export default async function StudentenPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function StudentenPage() {
+  const router = useRouter()
+  const [data, setData] = useState(null)
 
-  const { data: userData } = await supabase
-    .from('users')
-    .select('name, role')
-    .eq('email', user.email)
-    .single()
+  useEffect(() => {
+    const supabase = createClient()
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { router.replace('/login'); return }
 
-  if (userData?.role !== 'coordinator') redirect('/login')
+      const { data: prof } = await supabase
+        .from('profiles').select('name, role, school_id')
+        .eq('user_id', session.user.id).limit(1).maybeSingle()
 
-  // Haal studenten op
-  const { data: studenten } = await supabase
-    .from('users')
-    .select('*')
-    .eq('role', 'student')
-    .order('name')
+      if (!prof || prof.role !== 'coordinator') { router.replace('/login'); return }
 
-  return <StudentenClient studenten={studenten || []} coordinator={userData} />
+      const { data: studenten } = await supabase
+        .from('profiles').select('*')
+        .eq('school_id', prof.school_id)
+        .eq('role', 'student')
+        .order('name')
+
+      setData({ studenten: studenten ?? [], coordinator: prof })
+    }
+    load()
+  }, [router])
+
+  if (!data) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F3EE' }}>
+      <div style={{ width: 40, height: 40, border: '3px solid #E4DDD4', borderTop: '3px solid #F26B1D', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+
+  return <StudentenClient studenten={data.studenten} coordinator={data.coordinator} />
 }
