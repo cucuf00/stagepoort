@@ -225,7 +225,8 @@ export default function KoppelingenPage() {
     }).eq('id', placementId)
 
     if (!error) {
-      showToast('📨 Invullink verstuurd!')
+      const link = `${window.location.origin}/intake/${placementId}`
+      showToast(`📨 Invullink verstuurd! Link: ${link}`)
       await loadData()
     } else showToast('❌ ' + error.message, false)
     setBezig(prev => ({ ...prev, [placementId]: false }))
