@@ -130,70 +130,22 @@ export default function KoppelingenPage() {
 
   // CSV Import
   async function verwerkLeerlingen(leerlingen) {
-    const supabase = createClient()
-    let aangemaakt = 0
-    let overgeslagen = 0
-
-    for (const ll of leerlingen) {
-      // Check of student al bestaat op email
-      const { data: bestaand } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('school_id', profile.school_id)
-        .eq('email', ll.email)
-        .maybeSingle()
-
-      let studentId = bestaand?.id
-
-      if (!studentId) {
-        // Nieuw profiel aanmaken
-        const tempUserId = crypto.randomUUID()
-        const { data: nieuwProfiel, error: profErr } = await supabase
-          .from('profiles').insert({
-            user_id: tempUserId,
-            school_id: profile.school_id,
-            name: ll.naam,
-            email: ll.email,
-            role: 'student',
-            klas: ll.klas || null,
-          }).select('id').maybeSingle()
-
-        if (profErr) { console.error('Profiel aanmaken fout:', profErr.message); overgeslagen++; continue }
-        studentId = nieuwProfiel?.id
-      } else {
-        // Update bestaand profiel
-        await supabase.from('profiles').update({
-          name: ll.naam,
-          email: ll.email,
-          ...(ll.klas ? { klas: ll.klas } : {}),
-        }).eq('id', bestaand.id)
-      }
-
-      if (!studentId) { overgeslagen++; continue }
-
-      // Check of er al een actieve placement is
-      const { data: bestaandePlacement } = await supabase
-        .from('placements').select('id')
-        .eq('student_id', studentId)
-        .not('status', 'in', '("completed","cancelled")')
-        .maybeSingle()
-
-      if (bestaandePlacement) { overgeslagen++; continue }
-
-      // Maak placement aan
-      const { error: plErr } = await supabase.from('placements').insert({
-        school_id: profile.school_id,
-        student_id: studentId,
-        coordinator_id: profile.id,
-        status: 'pending',
+    try {
+      const res = await fetch('/api/import-studenten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leerlingen }),
       })
-
-      if (!plErr) aangemaakt++
-      else { console.error('Placement fout:', plErr.message); overgeslagen++ }
+      const data = await res.json()
+      if (data.error) {
+        showToast('❌ ' + data.error, false)
+      } else {
+        showToast(`✅ ${data.aangemaakt} leerlingen toegevoegd${data.overgeslagen > 0 ? `, ${data.overgeslagen} overgeslagen` : ''}`)
+        await loadData()
+      }
+    } catch (err) {
+      showToast('❌ ' + err.message, false)
     }
-
-    await loadData()
-    showToast(`✅ ${aangemaakt} leerlingen toegevoegd${overgeslagen > 0 ? `, ${overgeslagen} overgeslagen` : ''}`)
   }
 
   async function handleCSV(e) {
