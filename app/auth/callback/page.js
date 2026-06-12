@@ -1,12 +1,11 @@
 'use client'
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 function AuthCallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [status, setStatus] = useState('Stap 1: params lezen...')
 
   useEffect(() => {
     const supabase = createClient()
@@ -16,83 +15,54 @@ function AuthCallbackInner() {
       const token_hash = searchParams.get('token_hash')
       const type = searchParams.get('type') || 'magiclink'
 
-      setStatus(`Stap 1: code=${!!code} token=${!!token_hash}`)
-      await new Promise(r => setTimeout(r, 800))
-
       try {
-        let exchError = null
-
         if (token_hash) {
-          const result = await supabase.auth.verifyOtp({ token_hash, type })
-          exchError = result.error
+          await supabase.auth.verifyOtp({ token_hash, type })
         } else if (code) {
-          const result = await supabase.auth.exchangeCodeForSession(code)
-          exchError = result.error
+          await supabase.auth.exchangeCodeForSession(code)
         }
 
-        setStatus(`Stap 2: exchange fout=${exchError?.message ?? 'geen'}`)
-        await new Promise(r => setTimeout(r, 800))
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { router.replace('/login'); return }
 
-        if (exchError) {
-          setStatus('Exchange mislukt: ' + exchError.message)
-          setTimeout(() => router.replace('/login?error=auth'), 3000)
-          return
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession()
-        setStatus(`Stap 3: sessie=${sessionData?.session ? 'aanwezig' : 'LEEG'}`)
-        await new Promise(r => setTimeout(r, 800))
-
-        if (!sessionData?.session) {
-          setStatus('Geen sessie na exchange — dit is het probleem')
-          setTimeout(() => router.replace('/login'), 3000)
-          return
-        }
-
-        const userId = sessionData.session.user.id
-        setStatus(`Stap 4: user=${sessionData.session.user.email}`)
-        await new Promise(r => setTimeout(r, 800))
-
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('role')
-          .eq('user_id', userId)
+          .eq('user_id', session.user.id)
           .limit(1)
           .maybeSingle()
 
-        setStatus(`Stap 5: rol=${profile?.role ?? 'geen'} fout=${profileError?.message ?? 'geen'}`)
-        await new Promise(r => setTimeout(r, 1500))
-
         const roleRoutes = {
           coordinator: '/dashboard/coordinator',
-          student: '/dashboard/student',
-          coach: '/dashboard/coach',
-          company: '/dashboard/company',
+          student:     '/dashboard/student',
+          coach:       '/dashboard/coach',
+          company:     '/dashboard/company',
           super_admin: '/dashboard/admin',
         }
 
         router.replace(roleRoutes[profile?.role] ?? '/dashboard/coordinator')
-
-      } catch (err) {
-        setStatus('Crash: ' + err.message)
+      } catch {
+        router.replace('/login')
       }
     }
 
-    setTimeout(handleCallback, 300)
+    setTimeout(handleCallback, 100)
   }, [router, searchParams])
 
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: '#0D0D0F',
-      fontFamily: 'monospace', flexDirection: 'column', gap: 12, padding: 20
+      justifyContent: 'center', background: '#F7F3EE',
+      flexDirection: 'column', gap: 16
     }}>
       <div style={{
-        width: 36, height: 36, border: '3px solid #333',
+        width: 40, height: 40, border: '3px solid #E4DDD4',
         borderTop: '3px solid #F26B1D', borderRadius: '50%',
-        animation: 'spin 1s linear infinite', flexShrink: 0
+        animation: 'spin 1s linear infinite'
       }} />
-      <p style={{ color: '#F26B1D', fontSize: 13, textAlign: 'center', maxWidth: 400 }}>{status}</p>
+      <p style={{ color: '#5C6B7A', fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
+        Inloggen...
+      </p>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
@@ -100,7 +70,9 @@ function AuthCallbackInner() {
 
 export default function AuthCallback() {
   return (
-    <Suspense fallback={<div style={{minHeight:'100vh',background:'#0D0D0F'}} />}>
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: '#F7F3EE' }} />
+    }>
       <AuthCallbackInner />
     </Suspense>
   )
