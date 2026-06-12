@@ -11,11 +11,13 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return Response.json({ error: 'Niet ingelogd' }, { status: 401 })
 
-    const { data: prof } = await supabase
+    const { data: prof, error: profCheckErr } = await supabase
       .from('profiles').select('role, school_id, id')
       .eq('user_id', user.id).limit(1).maybeSingle()
 
-    if (prof?.role !== 'coordinator') return Response.json({ error: 'Geen toegang' }, { status: 403 })
+    console.log('Prof check:', JSON.stringify(prof), 'Error:', profCheckErr?.message)
+
+    if (prof?.role !== 'coordinator') return Response.json({ error: `Geen toegang — rol: ${prof?.role}, user: ${user.id}` }, { status: 403 })
 
     let aangemaakt = 0
     let overgeslagen = 0

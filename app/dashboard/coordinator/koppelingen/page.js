@@ -137,6 +137,7 @@ export default function KoppelingenPage() {
         body: JSON.stringify({ leerlingen }),
       })
       const data = await res.json()
+      console.log('Import response:', data)
       if (data.error) {
         showToast('❌ ' + data.error, false)
       } else {
@@ -145,6 +146,7 @@ export default function KoppelingenPage() {
       }
     } catch (err) {
       showToast('❌ ' + err.message, false)
+      console.error('Import fetch fout:', err)
     }
   }
 
