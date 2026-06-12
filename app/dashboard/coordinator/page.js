@@ -7,11 +7,15 @@ export default async function CoordinatorDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('name, role, school_id')
     .eq('user_id', user.id)
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  console.log('[coordinator] profile=', JSON.stringify(profile), 'error=', profileError?.message)
 
   if (!profile || profile.role !== 'coordinator') redirect('/login')
 
