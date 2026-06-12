@@ -12,12 +12,9 @@ function AuthCallbackInner() {
     const supabase = createClient()
 
     const handleCallback = async () => {
-      // Haal params op uit URL
       const code = searchParams.get('code')
       const token_hash = searchParams.get('token_hash')
       const type = searchParams.get('type') || 'magiclink'
-
-      console.log('[callback-client] code=', !!code, 'token_hash=', !!token_hash)
 
       try {
         let error = null
@@ -25,17 +22,9 @@ function AuthCallbackInner() {
         if (token_hash) {
           const result = await supabase.auth.verifyOtp({ token_hash, type })
           error = result.error
-          console.log('[callback-client] verifyOtp error=', error?.message)
         } else if (code) {
           const result = await supabase.auth.exchangeCodeForSession(code)
           error = result.error
-          console.log('[callback-client] exchangeCode error=', error?.message)
-        } else {
-          // Geen params — check of sessie al bestaat via URL hash (#access_token)
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session) {
-            console.log('[callback-client] sessie via hash gevonden')
-          }
         }
 
         if (error) {
@@ -44,16 +33,19 @@ function AuthCallbackInner() {
           return
         }
 
-        setStatus('Gelukt! Doorsturen...')
+        // Wacht even zodat sessie goed is opgeslagen
+        await new Promise(r => setTimeout(r, 500))
 
-        // Haal rol op en stuur door
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        setStatus(`Gebruiker: ${user?.email ?? 'niet gevonden'}`)
+
         if (!user) {
-          router.replace('/login')
+          setStatus('Geen gebruiker — terug naar login')
+          setTimeout(() => router.replace('/login'), 2000)
           return
         }
 
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('user_id', user.id)
@@ -61,7 +53,9 @@ function AuthCallbackInner() {
           .limit(1)
           .maybeSingle()
 
-        console.log('[callback-client] role=', profile?.role)
+        setStatus(`Rol: ${profile?.role ?? 'geen'} | Fout: ${profileError?.message ?? 'geen'}`)
+
+        await new Promise(r => setTimeout(r, 1500))
 
         const roleRoutes = {
           coordinator: '/dashboard/coordinator',
@@ -71,39 +65,35 @@ function AuthCallbackInner() {
           super_admin: '/dashboard/admin',
         }
 
-        router.replace(roleRoutes[profile?.role] ?? '/dashboard/coordinator')
+        if (!profile?.role) {
+          // Geen profiel gevonden — stuur toch door naar coordinator als fallback
+          router.replace('/dashboard/coordinator')
+          return
+        }
+
+        router.replace(roleRoutes[profile.role] ?? '/dashboard/coordinator')
 
       } catch (err) {
-        console.error('[callback-client] onverwachte fout:', err)
-        setStatus('Er ging iets mis...')
-        setTimeout(() => router.replace('/login'), 2000)
+        setStatus('Onverwachte fout: ' + err.message)
+        setTimeout(() => router.replace('/login'), 3000)
       }
     }
 
-    // Wacht even zodat Supabase de URL hash kan verwerken
-    const timer = setTimeout(handleCallback, 100)
-    return () => clearTimeout(timer)
+    setTimeout(handleCallback, 200)
   }, [router, searchParams])
 
   return (
     <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#F7F3EE',
-      fontFamily: 'Inter, sans-serif',
-      flexDirection: 'column',
-      gap: 16
+      minHeight: '100vh', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', background: '#F7F3EE',
+      fontFamily: 'Inter, sans-serif', flexDirection: 'column', gap: 16
     }}>
       <div style={{
-        width: 40, height: 40,
-        border: '3px solid #E4DDD4',
-        borderTop: '3px solid #F26B1D',
-        borderRadius: '50%',
+        width: 40, height: 40, border: '3px solid #E4DDD4',
+        borderTop: '3px solid #F26B1D', borderRadius: '50%',
         animation: 'spin 1s linear infinite'
       }} />
-      <p style={{ color: '#5C6B7A', fontSize: 14 }}>{status}</p>
+      <p style={{ color: '#5C6B7A', fontSize: 14, maxWidth: 300, textAlign: 'center' }}>{status}</p>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
