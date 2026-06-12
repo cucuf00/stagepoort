@@ -65,6 +65,36 @@ export default function StudentenPage() {
   const [zoek, setZoek] = useState('')
   const [uitgeklapt, setUitgeklapt] = useState(null)
   const [geselecteerd, setGeselecteerd] = useState([])
+  const [editModal, setEditModal] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [editBezig, setEditBezig] = useState(false)
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg, ok = true) {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  function openEdit(student) {
+    setEditForm({ name: student.name || '', email: student.email || '', klas: student.klas || '' })
+    setEditModal(student)
+  }
+
+  async function slaEditOp() {
+    setEditBezig(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('profiles').update({
+      name: editForm.name,
+      email: editForm.email,
+      klas: editForm.klas,
+    }).eq('id', editModal.id)
+    if (!error) {
+      setStudenten(prev => prev.map(s => s.id === editModal.id ? { ...s, ...editForm } : s))
+      setEditModal(null)
+      showToast('✅ Leerling bijgewerkt!')
+    } else showToast('❌ ' + error.message, false)
+    setEditBezig(false)
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -94,6 +124,42 @@ export default function StudentenPage() {
 
   return (
     <CoordinatorLayout profile={profile}>
+      {toast && (
+        <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', background: toast.ok !== false ? '#1A7F52' : '#C03020', color: '#fff', padding: '12px 24px', borderRadius: 12, fontWeight: 700, fontSize: 14, zIndex: 999, whiteSpace: 'nowrap' }}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setEditModal(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 440, width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 17, fontWeight: 700, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              ✏️ Leerling bewerken
+              <button onClick={() => setEditModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#5C6B7A' }}>✕</button>
+            </div>
+            {[['Naam', 'name'], ['E-mail', 'email'], ['Klas', 'klas']].map(([label, key]) => (
+              <div key={key} style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#5C6B7A', marginBottom: 5 }}>{label}</label>
+                <input
+                  value={editForm[key] || ''}
+                  onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E4DDD4', borderRadius: 10, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none' }}
+                />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button onClick={slaEditOp} disabled={editBezig} style={{ flex: 1, padding: '12px', background: '#F26B1D', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                {editBezig ? '⏳ Opslaan...' : '💾 Opslaan'}
+              </button>
+              <button onClick={() => setEditModal(null)} style={{ padding: '12px 20px', background: '#F0EDE8', border: 'none', borderRadius: 10, color: '#5C6B7A', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                Annuleren
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ background: '#fff', borderBottom: '1px solid #E4DDD4', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h1 style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, fontWeight: 700 }}>Studenten</h1>
         <div style={{ background: '#E8F0F6', padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, color: '#0E3A5C' }}>👤 {profile?.name}</div>
@@ -159,7 +225,7 @@ export default function StudentenPage() {
                 <div style={{ fontSize: 13, color: '#5C6B7A' }}>{student.uren || 0} uur</div>
                 <div style={{ fontSize: 13, color: '#5C6B7A' }}>Stap {Math.min(student.stap || 1, 5)} / 5</div>
                 <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-                  <button style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #E4DDD4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>✏️</button>
+                  <button onClick={e => { e.stopPropagation(); openEdit(student) }} style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #E4DDD4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>✏️</button>
                   <button style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #E4DDD4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>📧</button>
                 </div>
               </div>

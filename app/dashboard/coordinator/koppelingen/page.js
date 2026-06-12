@@ -61,6 +61,8 @@ export default function KoppelingenPage() {
   const [uitgeklapt, setUitgeklapt] = useState(null)
   const [afwijsReden, setAfwijsReden] = useState({})
   const [showAfwijs, setShowAfwijs] = useState(null)
+  const [aanpassenModal, setAanpassenModal] = useState(null)
+  const [aanpassenForm, setAanpassenForm] = useState({})
   const [csvBezig, setCsvBezig] = useState(false)
   const [plakTekst, setPlakTekst] = useState('')
   const [plakPreview, setPlakPreview] = useState([])
@@ -263,6 +265,48 @@ export default function KoppelingenPage() {
     setBezig(prev => ({ ...prev, [placementId]: false }))
   }
 
+  function openAanpassen(placement) {
+    setAanpassenForm({
+      first_name: placement.first_name || '',
+      infix: placement.infix || '',
+      last_name: placement.last_name || '',
+      student_phone: placement.student_phone || '',
+      company_name: placement.company_name || '',
+      supervisor_name: placement.supervisor_name || '',
+      company_address: placement.company_address || '',
+      company_postcode: placement.company_postcode || '',
+      company_city: placement.company_city || '',
+      company_phone: placement.company_phone || '',
+      company_email: placement.company_email || '',
+      green_stage: placement.green_stage ? 'ja' : 'nee',
+    })
+    setAanpassenModal(placement)
+  }
+
+  async function slaAanpassing() {
+    const supabase = createClient()
+    const updates = {
+      first_name: aanpassenForm.first_name,
+      infix: aanpassenForm.infix || null,
+      last_name: aanpassenForm.last_name,
+      student_phone: aanpassenForm.student_phone,
+      company_name: aanpassenForm.company_name,
+      supervisor_name: aanpassenForm.supervisor_name,
+      company_address: aanpassenForm.company_address,
+      company_postcode: aanpassenForm.company_postcode,
+      company_city: aanpassenForm.company_city,
+      company_phone: aanpassenForm.company_phone,
+      company_email: aanpassenForm.company_email,
+      green_stage: aanpassenForm.green_stage === 'ja',
+    }
+    const { error } = await supabase.from('placements').update(updates).eq('id', aanpassenModal.id)
+    if (!error) {
+      setPlacements(prev => prev.map(p => p.id === aanpassenModal.id ? { ...p, ...updates } : p))
+      setAanpassenModal(null)
+      showToast('✅ Wijzigingen opgeslagen!')
+    } else showToast('❌ ' + error.message, false)
+  }
+
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F3EE' }}>
       <div style={{ width: 40, height: 40, border: '3px solid #E4DDD4', borderTop: '3px solid #F26B1D', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
@@ -391,6 +435,12 @@ export default function KoppelingenPage() {
                 {placement.company_phone && <div style={{ fontSize: 12, marginTop: 2 }}>📞 <a href={`tel:${placement.company_phone}`} style={{ color: '#0E3A5C' }}>{placement.company_phone}</a></div>}
               </div>
             </div>
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={e => { e.stopPropagation(); openAanpassen(placement) }}
+                style={{ padding: '8px 18px', background: '#0E3A5C', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+              >✏️ Gegevens aanpassen</button>
+            </div>
           </div>
         )}
       </div>
@@ -402,6 +452,47 @@ export default function KoppelingenPage() {
       {toast && (
         <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', background: toast.ok !== false ? '#1A7F52' : '#C03020', color: '#fff', padding: '12px 24px', borderRadius: 12, fontWeight: 700, fontSize: 14, zIndex: 999, whiteSpace: 'nowrap' }}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* Aanpassen modal */}
+      {aanpassenModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setAanpassenModal(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 17, fontWeight: 700, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              ✏️ Gegevens aanpassen
+              <button onClick={() => setAanpassenModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#5C6B7A' }}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 10, marginBottom: 12 }}>
+              {[['Voornaam','first_name'],['Tussenvoegsel','infix'],['Achternaam','last_name']].map(([label,key]) => (
+                <div key={key}>
+                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#5C6B7A', marginBottom:4 }}>{label}</label>
+                  <input value={aanpassenForm[key]||''} onChange={e => setAanpassenForm(p=>({...p,[key]:e.target.value}))} style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #E4DDD4', borderRadius:8, fontFamily:'Inter,sans-serif', fontSize:13, outline:'none' }} />
+                </div>
+              ))}
+            </div>
+            {['Telefoonnummer leerling','Bedrijfsnaam','Bezoekadres','Postcode','Plaats','Tel. stagebedrijf','E-mail stagebedrijf','Naam stagebegeleider'].map((label, i) => {
+              const keys = ['student_phone','company_name','company_address','company_postcode','company_city','company_phone','company_email','supervisor_name']
+              const key = keys[i]
+              return (
+                <div key={key} style={{ marginBottom: 10 }}>
+                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#5C6B7A', marginBottom:4 }}>{label}</label>
+                  <input value={aanpassenForm[key]||''} onChange={e => setAanpassenForm(p=>({...p,[key]:e.target.value}))} style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #E4DDD4', borderRadius:8, fontFamily:'Inter,sans-serif', fontSize:13, outline:'none' }} />
+                </div>
+              )
+            })}
+            <div style={{ display:'flex', gap:10, marginBottom:20, marginTop:4 }}>
+              {['ja','nee'].map(opt => (
+                <button key={opt} onClick={() => setAanpassenForm(p=>({...p,green_stage:opt}))} style={{ flex:1, padding:'10px', borderRadius:10, border:'2px solid', borderColor: aanpassenForm.green_stage===opt?(opt==='ja'?'#1A7F52':'#C03020'):'#E4DDD4', background: aanpassenForm.green_stage===opt?(opt==='ja'?'#E2F4EC':'#FAEAE7'):'#fff', color: aanpassenForm.green_stage===opt?(opt==='ja'?'#1A7F52':'#C03020'):'#5C6B7A', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                  {opt==='ja'?'🌱 Groene stage':'❌ Geen groene stage'}
+                </button>
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={slaAanpassing} style={{ flex:1, padding:'12px', background:'#F26B1D', border:'none', borderRadius:10, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer' }}>💾 Wijzigingen opslaan</button>
+              <button onClick={() => setAanpassenModal(null)} style={{ padding:'12px 20px', background:'#F0EDE8', border:'none', borderRadius:10, color:'#5C6B7A', fontWeight:600, fontSize:14, cursor:'pointer' }}>Annuleren</button>
+            </div>
+          </div>
         </div>
       )}
 
