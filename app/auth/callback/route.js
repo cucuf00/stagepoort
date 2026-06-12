@@ -2,22 +2,20 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function GET(request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
+
+  // Gebruik altijd de harde site URL uit env, nooit request headers
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://stagepoort.vercel.app'
 
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Stuur altijd naar root — die handelt client-side de rol-routing af
-      const forwardedHost = request.headers.get('x-forwarded-host')
-      if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}/`)
-      }
-      return NextResponse.redirect(`${origin}/`)
+      return NextResponse.redirect(`${siteUrl}/`)
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth`)
+  return NextResponse.redirect(`${siteUrl}/login?error=auth`)
 }
