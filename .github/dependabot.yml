@@ -1,6 +1,7 @@
 version: 2
 
 updates:
+  # npm packages — wekelijks op maandag
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -15,12 +16,11 @@ updates:
       dev-dependencies:
         dependency-type: "development"
     ignore:
+      # Geen automatische major-versie updates voor Next.js — die bevatten breaking changes
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
-    labels:
-      - "dependabot"
-      - "dependencies"
 
+  # GitHub Actions — wekelijks op maandag
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -28,6 +28,3 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Europe/Amsterdam"
-    labels:
-      - "dependabot"
-      - "github-actions"
