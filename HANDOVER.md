@@ -1,52 +1,59 @@
-# Stagepoort — Volledige Project Handover
+# Stagepoort — Volledige Project Handover (v2)
 
-> Geschreven op 13 juni 2026. Dit document beschrijft het volledige project van A tot Z zodat een nieuwe AI zonder problemen kan verderbouwen.
+> Geschreven op 13 juni 2026. Volledig gecheckt aan de hand van de live codebase.
 
 ---
 
 ## 1. Projectoverzicht
 
-**Stagepoort** is een multi-tenant SaaS-platform voor VMBO/MBO-scholen dat het stageproces volledig digitaliseert: van leerlingimport en intakeformulier tot urenregistratie, opdrachten, weekstories en officiële evaluaties.
+**Stagepoort** is een multi-tenant SaaS-platform voor VMBO/MBO-scholen dat het stageproces volledig digitaliseert: van leerlingimport en intakeformulier tot urenregistratie, opdrachten, weekstories, officiële evaluaties en coach-begeleiding.
 
 ### Verdienmodel
 - Jaarlicentie per school: €2.000–€25.000
 - Elke school is een aparte tenant met volledige data-isolatie via Row Level Security
 
 ### Doelgroep
-- **Stagecoördinatoren** — beheren het volledige stageproces
-- **Leerlingen (studenten)** — dienen uren in, maken opdrachten, vullen weekstories in
-- **Stagecoaches (docenten)** — begeleiden studenten, nakijken, evalueren
-- **Stagebegeleiders (bedrijf)** — toekomst: eigen dashboard (nog niet gebouwd)
+| Rol | Dashboard |
+|-----|-----------|
+| coordinator | `/dashboard/coordinator` |
+| student | `/dashboard/student` |
+| coach | `/dashboard/coach` |
+| company | nog niet gebouwd |
+| super_admin | nog niet gebouwd |
 
 ---
 
-## 2. Tech Stack
+## 2. Tech Stack & Credentials
 
-| Component | Keuze |
-|-----------|-------|
-| Framework | Next.js 16 (App Router) |
-| React | 19.2.4 |
-| Database + Auth | Supabase (PostgreSQL + RLS) |
-| Hosting | Vercel |
-| Email | Resend |
-| Styling | Puur inline CSS (geen Tailwind actief) |
-
-### Credentials & Omgevingsvariabelen
-
-| Variabele | Waarde |
+| Component | Waarde |
 |-----------|--------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://vnarhxsxbbmbowtvzfaj.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_-brPYXovkOjOf1yZaZ791Q_ibksTM3R` |
-| `RESEND_API_KEY` | `re_M9QBuczq_39MSEjK2fWNbQ6LybpEkobwb` |
-| `NEXT_PUBLIC_SITE_URL` | `https://stagepoort.vercel.app` |
+| Framework | Next.js 16 (App Router), TypeScript config, JavaScript pages |
+| React | 19.2.4 |
+| Database + Auth | Supabase — project `vnarhxsxbbmbowtvzfaj`, EU Frankfurt |
+| Hosting | Vercel — `stagepoort-s-projects/stagepoort` |
+| Email | Resend — domein `stagepoort.nl` |
+| Styling | Puur inline CSS — geen Tailwind actief ondanks aanwezigheid in devDependencies |
 
-### Repositories & Services
-- **GitHub:** `github.com/cucuf00/stagepoort`
-- **Vercel project:** `stagepoort-s-projects/stagepoort`
-- **Live URL:** `https://stagepoort.vercel.app`
-- **Supabase project ID:** `vnarhxsxbbmbowtvzfaj` (regio EU Frankfurt)
-- **Resend domein:** `stagepoort.nl` (geverifieerd via TransIP DNS)
-- **Supabase SMTP:** `smtp.resend.com:465`, sender: `noreply@stagepoort.nl`
+### Omgevingsvariabelen (in Vercel dashboard)
+```
+NEXT_PUBLIC_SUPABASE_URL      = https://vnarhxsxbbmbowtvzfaj.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY = sb_publishable_-brPYXovkOjOf1yZaZ791Q_ibksTM3R
+RESEND_API_KEY                = re_M9QBuczq_39MSEjK2fWNbQ6LybpEkobwb
+NEXT_PUBLIC_SITE_URL          = https://stagepoort.vercel.app
+```
+
+> ⚠️ Er is **GEEN** `SUPABASE_SERVICE_ROLE_KEY` geconfigureerd — zie kritieke bug #1 hieronder.
+
+### Resend SMTP (geconfigureerd in Supabase Auth)
+- Host: `smtp.resend.com`, Port: 465, SSL
+- Sender: `noreply@stagepoort.nl`
+- Auth: username = `resend`, password = Resend API key
+
+### Supabase Clients (`lib/supabase/`)
+- `client.js` → `createBrowserClient` met `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `server.js` → `createServerClient` met `NEXT_PUBLIC_SUPABASE_ANON_KEY` + cookies
+
+> ⚠️ **Beide clients gebruiken de ANON key.** Er is geen service role client. Zie bug #1.
 
 ---
 
@@ -56,33 +63,39 @@
 stagepoort/
 ├── app/
 │   ├── api/
-│   │   ├── import-studenten/route.js    Server-side CSV/plak import (RLS bypass)
-│   │   ├── intake/route.js              Anonieme intake submit (geen auth nodig)
-│   │   ├── send-invite/route.js         Email invullink naar leerling
+│   │   ├── import-studenten/route.js    Server-side import (gebruikt coordinator auth)
+│   │   ├── intake/route.js              ⚠️ BUG: anonieme intake werkt mogelijk niet
+│   │   ├── send-invite/route.js         Email invullink naar leerling (Resend)
 │   │   └── send-supervisor/route.js     Email naar stagebegeleider bij goedkeuring
-│   ├── auth/callback/page.js            Magic link callback + rol-routing
+│   ├── auth/callback/page.js            Magic link afhandeling + rol-routing
 │   ├── components/
-│   │   └── CoordinatorLayout.js         Gedeelde sidebar (donkerblauw) voor coordinator
+│   │   └── CoordinatorLayout.js         Sidebar voor coordinator (donkerblauw #0E3A5C)
 │   ├── dashboard/
-│   │   ├── coach/page.js                Coach dashboard (4 tabs)
+│   │   ├── coach/page.js                ✅ Volledig coach dashboard (4 tabs)
 │   │   ├── coordinator/
-│   │   │   ├── page.js                  Dashboard + studenten gecombineerd
-│   │   │   ├── koppelingen/page.js      Stagekoppeling beheer (4 secties)
-│   │   │   ├── beoordelen/page.js       Uren + opdrachten beoordelen
-│   │   │   ├── opdrachten/page.js       Opdrachten/evaluaties/badges beheer
-│   │   │   └── beheer/page.js           Periodes + coordinatoren + email template
-│   │   └── student/page.js              Student dashboard (donker thema, 4 tabs)
-│   ├── intake/[token]/page.js           Anoniem intakeformulier (4 stappen)
-│   ├── login/page.js                    Magic link loginpagina
-│   ├── onboarding/page.js               Klas invullen bij eerste login student
+│   │   │   ├── page.js                  ✅ Gecombineerd dashboard + studenten
+│   │   │   ├── koppelingen/page.js      ✅ Stagekoppeling flow (4 secties)
+│   │   │   ├── beoordelen/page.js       ✅ Uren + opdrachten beoordelen
+│   │   │   ├── opdrachten/page.js       ✅ Opdrachten/evaluaties/badges beheer
+│   │   │   ├── beheer/page.js           ✅ Periodes/coordinatoren/emailtemplate
+│   │   │   └── studenten/
+│   │   │       ├── page.js              ⚠️ DEAD CODE — gebruik coordinator/page.js
+│   │   │       └── StudentenClient.js   ⚠️ DEAD CODE — oud prototype met demo data
+│   │   └── student/
+│   │       ├── page.js                  ✅ Volledig student dashboard (donker thema)
+│   │       └── StudentClient.js         ⚠️ DEAD CODE — oud prototype
+│   ├── intake/[token]/page.js           ✅ Anoniem intakeformulier (4 stappen)
+│   ├── login/page.js                    ✅ Magic link loginpagina
+│   ├── onboarding/page.js               ✅ Klas kiezen bij eerste login student
 │   ├── layout.js
-│   └── page.js                         Landingspagina / redirect
+│   └── page.js                         Redirect naar /login
 ├── lib/supabase/
-│   ├── client.js                        Browser Supabase client
-│   └── server.js                        Server-side Supabase client (service role)
-├── middleware.js                         Leeg (auth is volledig client-side)
+│   ├── client.js                        Browser client (anon key)
+│   └── server.js                        Server client (anon key + cookies)
+├── middleware.js                         LEEG — auth is volledig client-side
+├── next.config.ts                        Leeg (geen speciale config)
 ├── package.json
-└── HANDOVER.md                          Dit document
+└── HANDOVER.md
 ```
 
 ---
@@ -90,562 +103,709 @@ stagepoort/
 ## 4. Auth & Rollen
 
 ### Inlogmethode
-Volledig **magic link** via Supabase Auth + Resend SMTP. Geen wachtwoorden.
+Magic link via Supabase Auth + Resend SMTP. Geen wachtwoorden.
 
-### Rollen (opgeslagen in `profiles.role`)
-```
-student       → /dashboard/student
-coordinator   → /dashboard/coordinator
-coach         → /dashboard/coach
-company       → (nog geen dashboard)
-super_admin   → (nog geen dashboard)
-```
+### Callback flow (`/auth/callback/page.js`)
+1. Leest `token_hash` of `code` uit URL params
+2. `verifyOtp` of `exchangeCodeForSession`
+3. Haalt profiel op via `user_id`
+4. **Speciale case:** student zonder `klas` → `/onboarding`
+5. Rol-routing:
+   ```
+   coordinator → /dashboard/coordinator
+   student     → /dashboard/student
+   coach       → /dashboard/coach
+   company     → /dashboard/company (NIET GEBOUWD)
+   super_admin → /dashboard/admin (NIET GEBOUWD)
+   ```
 
-### Auth Flow
-1. Gebruiker vult email in op `/login`
-2. Supabase stuurt magic link via `noreply@stagepoort.nl`
-3. Link opent `/auth/callback` → `verifyOtp` → `exchangeCodeForSession`
-4. Profiel ophalen op `user_id` → rol-routing naar juist dashboard
-5. **Trigger:** als `profiles.user_id IS NULL` (CSV-import leerling) en email matcht → trigger koppelt `user_id` automatisch
+### Onboarding (`/onboarding/page.js`)
+Wordt getriggerd als `profiles.klas IS NULL` na eerste login van student.
+- Toont beschikbare klassen uit `period_classes` tabel
+- Student kiest klas → systeem bepaalt automatisch de juiste periode via datumlogica
+- Werkt zo: kijk welke `period_classes.klas` matches heeft met `stage_periods`, dan pak de meest relevante periode (toekomstig > actief > verlopen)
+- Slaat klas op in `profiles.klas` en koppelt `period_id` aan bestaande/nieuwe placement
 
 ### Trigger: `handle_new_user()`
-Bij elke nieuwe auth.user kijkt de trigger of er al een profiel bestaat met hetzelfde email en `user_id IS NULL`. Zo ja: update dat profiel met de nieuwe `user_id`. Dit is essentieel voor de CSV-import flow.
+```sql
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.profiles WHERE email = NEW.email AND user_id IS NULL
+  ) THEN
+    UPDATE public.profiles SET user_id = NEW.id
+    WHERE email = NEW.email AND user_id IS NULL;
+  END IF;
+  RETURN NEW;
+END;
+```
+Werkt voor CSV-geïmporteerde leerlingen die later inloggen via magic link.
 
 ---
 
-## 5. Database Schema
+## 5. Kritieke Bugs & Workarounds
 
-### Multi-tenant architectuur
-Elke tabel heeft een `school_id` kolom. RLS helper functies:
-- `get_my_school_id()` → haalt school_id op van ingelogde user
-- `get_my_role()` → haalt rol op
-- `get_my_profile_id()` → haalt profile id op
-- `is_super_admin()` → boolean check
+### Bug #1 — Intake route werkt alleen als leerling al een sessie heeft (KRITIEK)
+**Probleem:** `app/api/intake/route.js` importeert `createClient` van `lib/supabase/server.js`. Die client gebruikt de ANON key met cookies. Als een leerling NIET is ingelogd (wat normaal is bij intake), zijn er geen auth cookies. De `placements` SELECT en UPDATE policies vereisen `authenticated`. Dus de route zou een 404 teruggeven ("Placement niet gevonden").
 
-### Alle tabellen (23 stuks)
+**Hoe het toch werkt:** De intake flow werkt momenteel alleen als de persoon die het formulier invult een actieve auth sessie heeft (bijv. coordinator die test, of student die al ooit ingelogd was). In productie zal dit falen voor gewone studenten.
+
+**Fix:**
+Optie A — Anon policies toevoegen:
+```sql
+CREATE POLICY "placements_intake_select_anon" ON public.placements
+  FOR SELECT TO anon
+  USING (status IN ('pending', 'invited', 'rejected'));
+
+CREATE POLICY "placements_intake_update_anon" ON public.placements
+  FOR UPDATE TO anon
+  USING (status IN ('pending', 'invited', 'rejected'))
+  WITH CHECK (status = 'review');
+```
+
+Optie B — Service role key toevoegen:
+1. Zet `SUPABASE_SERVICE_ROLE_KEY` in Vercel environment variables
+2. Maak `lib/supabase/admin.js`:
+```js
+import { createClient } from '@supabase/supabase-js'
+export const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
+```
+3. Gebruik `supabaseAdmin` in `intake/route.js` in plaats van `createClient()`
+
+**Aanbeveling:** Optie A is veiliger (beperktere toegang) en eenvoudiger.
+
+### Bug #2 — Uren kolom toont altijd "0 / X u" in dashboard
+**Probleem:** In `coordinator/page.js` toont de tabel `0 / {pl?.hours_required || 320} u`. Er wordt geen query gedaan om echte goedgekeurde uren op te halen per leerling.
+
+**Fix:** Voeg een uren-query toe die de SUM van approved hours per placement ophaalt, bijv. via een Supabase RPC of een join.
+
+### Bug #3 — Dead code bestanden
+De volgende bestanden worden nergens geïmporteerd maar bestaan wel:
+- `app/dashboard/coordinator/studenten/StudentenClient.js` — oud CSS/demo prototype
+- `app/dashboard/student/StudentClient.js` — oud CSS/demo prototype
+- `app/dashboard/coordinator/studenten/page.js` — vervangen door `coordinator/page.js`
+
+Deze kunnen veilig verwijderd worden.
+
+---
+
+## 6. Database Schema (23 tabellen)
+
+### Testdata
+- **School ID:** `00000000-0000-0000-0000-000000000001` (ROC Rotterdam)
+- **Coordinator:** Yusuf Bagcivan, email `yusuf.bagcivan@hotmail.com` / `cucuf@live.nl`
+- **Studenten:** Jan (`cucuf00@gmail.com`), Yusu (`zm@live.nl`, 100 XP, streak 1), mkmk, Yuf Deir, Yusuf Demir
+
+### Multi-tenant aanpak
+Elke tabel heeft `school_id`. RLS helper functies (SECURITY DEFINER):
+- `get_my_school_id()` — school_id van ingelogde user
+- `get_my_role()` — rol van ingelogde user
+- `get_my_profile_id()` — profile id van ingelogde user
+- `is_super_admin()` — boolean
+
+### Tabellen
 
 #### `schools`
-Tenant root. Eén school = één tenant.
 ```
-id, name, slug (uniek), city, active, license_status, max_students, subscription_ends_at, created_at
+id (uuid PK), name, slug (unique), city, active (bool),
+license_status (trial/active/expired/suspended),
+max_students, subscription_ends_at, created_at
 ```
-**Testdata:** ROC Rotterdam, id = `00000000-0000-0000-0000-000000000001`
 
-#### `profiles`
-Centrale gebruikerstabel voor alle rollen. `user_id` is nullable (CSV-import leerlingen hebben nog geen auth account).
+#### `profiles` — alle gebruikers
 ```
-id, user_id (nullable FK auth.users), school_id, company_id,
+id (uuid PK), user_id (nullable FK auth.users), school_id, company_id,
 name, role (student/coordinator/coach/company/super_admin),
 phone, klas, email,
-xp, level, streak, last_story_week, last_story_year,
-created_at
+xp (default 0), level (default 1), streak (default 0),
+last_story_week, last_story_year, created_at
 ```
-**Constraint:** `UNIQUE(user_id, school_id)` (maar user_id nullable!)
+Constraint: `UNIQUE(user_id, school_id)` maar user_id nullable (CSV-import leerlingen).
 
-#### `placements`
-Kern van het systeem. Eén placement = één stage van een leerling.
-Een leerling kan meerdere placements hebben (één per schooljaar).
+#### `placements` — kern van het systeem
+Eén placement = één stage. Leerling kan meerdere placements hebben (per schooljaar/periode).
 ```
-id, school_id, student_id, coach_id (FK profiles), coordinator_id,
-company_id, academic_year_id, period_id (FK stage_periods),
+id, school_id, student_id (FK profiles), coach_id (FK profiles),
+coordinator_id (FK profiles), company_id, academic_year_id, period_id (FK stage_periods),
 status (pending/invited/review/active/rejected/halfway/completed/cancelled),
-start_date, end_date, hours_required,
+start_date, end_date, hours_required (default 200),
 first_name, infix, last_name, student_phone,
 company_name, company_address, company_postcode, company_city,
 company_phone, company_email, supervisor_name,
-green_stage (bool), rejection_reason,
+green_stage (bool default false), rejection_reason,
 invited_at, submitted_at, approved_at, completed_at,
-final_grade, coach_name, coach_email,
-created_at
+final_grade, coach_name, coach_email, created_at
 ```
 
-**Placement statussen:**
-- `pending` → aangemaaklt, nog geen invullink verstuurd
-- `invited` → invullink verstuurd naar leerling
-- `review` → leerling heeft intake ingevuld, wacht op coordinator
-- `active` → goedgekeurd, stage actief
-- `rejected` → afgewezen met reden
-- `halfway` → halverwege (tussenevaluatie gedaan)
-- `completed` → afgerond
-- `cancelled` → geannuleerd
+**Statussen stroom:**
+```
+pending → invited → review → active/rejected
+active → halfway → completed/cancelled
+```
 
-#### `stage_periods`
-Stageperiodes per school (Leerjaar 3, Leerjaar 4 etc.)
+#### `stage_periods` — stageperiodes per school
 ```
-id, school_id, name, start_date, end_date, hours_goal, created_by, created_at
+id, school_id, name, start_date, end_date,
+hours_goal (default 160), created_by, created_at
 ```
-**Testdata:** Leerjaar 3 oriëntatiestage (160u) + Leerjaar 4 beroepsstage (320u)
+Default: Leerjaar 3 (160u) + Leerjaar 4 (320u).
 
-#### `hours`
-Urenregistratie per leerling.
+#### `period_classes` — klassen gekoppeld aan periodes
 ```
-id, school_id, placement_id, student_id,
-date, hours, description,
+id, school_id, period_id (FK stage_periods), klas (text), created_at
+```
+UNIQUE(period_id, klas). Gebruikt door onboarding om student aan juiste periode te koppelen.
+SELECT toegankelijk voor anon + authenticated.
+
+#### `hours` — urenregistratie
+```
+id, school_id, placement_id, student_id (FK profiles),
+date, hours (numeric), description,
 status (pending/approved/rejected), rejection_reason,
-approved_by, approved_at, created_at
+approved_by (FK profiles), approved_at, created_at
 ```
 
-#### `assignments`
-Opdrachten klaargezet door coordinator, per periode.
+#### `assignments` — opdrachten (door coordinator klaargezet per periode)
 ```
-id, school_id, period_id, placement_id (legacy),
+id, school_id, period_id, placement_id (legacy, niet meer gebruikt),
 title, description, question (legacy), deadline,
-max_points, xp_reward, weging, sort_order,
+max_points (default 10), xp_reward (default 100),
+weging (default 1), sort_order (default 0),
 questions (jsonb: [{id, v, hint, punten}]),
-status (open/submitted/approved/rejected — legacy veld),
-answer (legacy), created_at
+status/answer (legacy velden, niet meer gebruikt), created_at
 ```
+> Let op: `placement_id` en `status`/`answer` zijn legacy kolommen uit de initiële opzet. De nieuwe aanpak gebruikt `period_id` en de aparte `student_assignments` tabel.
 
-#### `student_assignments`
-Inleveringen van studenten per opdracht.
+#### `student_assignments` — inleveringen per student
 ```
-id, school_id, assignment_id, student_id, placement_id,
-status (open/submitted/graded),
-answer, points, grade,
+id, school_id, assignment_id (FK assignments), student_id (FK profiles),
+placement_id, status (open/submitted/graded),
+answer (tekst), points (behaalde punten), grade (numeric 1-10),
 xp_awarded, submitted_at,
-graded_by, graded_at, feedback, created_at
+graded_by (FK profiles), graded_at, feedback, created_at
 ```
+UNIQUE(assignment_id, student_id).
 
-#### `week_stories`
-Wekelijkse reflecties van studenten. 4 vragen.
+#### `week_stories` — wekelijkse reflecties
 ```
 id, school_id, student_id, placement_id,
 week_number, year,
-mood (emoji), answer_1, answer_2, answer_3,
-xp_awarded, created_at
+mood (emoji string), answer_1, answer_2, answer_3,
+xp_awarded (default 100), created_at
 ```
-**UNIQUE:** (student_id, week_number, year)
+UNIQUE(student_id, week_number, year).
 
-**De 4 vragen:**
-1. Hoe was je stageweek? (mood emoji)
+De 4 vragen:
+1. Hoe was je stageweek? (mood emoji: 😴😐🙂😎🔥)
 2. Wat is het tofste dat je deze week hebt gedaan?
 3. Waar liep je tegenaan?
 4. Wat wil je volgende week anders aanpakken?
 
-#### `badges`
-Badges aanpasbaar door coordinator.
+#### `badges` — badges aanpasbaar door coordinator
 ```
 id, school_id, emoji, name, description,
 type (streak/hours/assignments/grade/weekstory/manual),
-threshold, xp_reward, sort_order, created_at
+threshold, xp_reward (default 50), sort_order, created_at
 ```
-**9 default badges** voor ROC Rotterdam aangemaakt.
+9 defaults aangemaakt voor ROC Rotterdam.
+> ⚠️ Badge-toekenning is NIET geautomatiseerd — geen achtergrondproces.
 
-#### `student_badges`
-Behaalde badges per student.
+#### `student_badges` — behaalde badges
 ```
 id, school_id, student_id, badge_id, awarded_at
 ```
+UNIQUE(student_id, badge_id).
 
-#### `evaluation_moments`
-Toetsmomenten (tussenevaluatie/eindevaluatie) aanpasbaar door coordinator.
+#### `evaluation_moments` — toetsmomenten (door coordinator beheerd)
 ```
 id, school_id, period_id,
 name, week_label,
 type (midterm/final/custom),
-questions (jsonb: [{id, type, tekst}]), — type: slider/sterren/tekst
+questions (jsonb: [{id, type (slider/sterren/tekst), tekst}]),
 sort_order, created_at
 ```
-**2 default momenten:** Tussenevaluatie (week 26) + Eindevaluatie (week 38)
+Defaults: Tussenevaluatie week 26 (midterm) + Eindevaluatie week 38 (final).
 
-#### `evaluation_responses`
-Coach vult evaluatieformulier in per leerling per moment.
+#### `evaluation_responses` — coach vult evaluatieformulier in
 ```
 id, school_id, placement_id, moment_id, coach_id,
-responses (jsonb: {0: value, 1: value, ...}),
+responses (jsonb: {0: waarde, 1: waarde, ...}),
 coach_signed_at, created_at, updated_at
 ```
-**UNIQUE:** (placement_id, moment_id)
+UNIQUE(placement_id, moment_id).
 
-#### `coach_praise`
-Bijhouden van "👊 Goed bezig" knop (max 3x per student per coach).
+#### `coach_praise` — 👊 Goed bezig knop (max 3x per student per coach)
 ```
 id, school_id, coach_id, student_id,
-count (max 3), last_given_at
+count (integer max 3), last_given_at
 ```
-**UNIQUE:** (coach_id, student_id)
+UNIQUE(coach_id, student_id).
 
-#### `coordinator_invites`
-Mede-coordinatoren uitnodigen.
+#### `coordinator_invites` — mede-coordinatoren uitnodigen
 ```
 id, school_id, email, period_id, invited_by,
 status (invited/active), invited_at
 ```
+UNIQUE(school_id, email).
 
-#### `email_templates`
-E-mailtemplate per school, aanpasbaar door coordinator.
+#### `email_templates` — per school aanpasbaar
 ```
-id, school_id, type (supervisor_welcome/hours_reminder/assignment_reminder),
+id, school_id,
+type (supervisor_welcome/hours_reminder/assignment_reminder),
 subject, body, updated_at
 ```
-**Variabelen in templates:** `{{begeleider_naam}}`, `{{leerling_naam}}`, `{{bedrijfsnaam}}`, `{{startdatum}}`, `{{link}}`, `{{coordinator_naam}}`, `{{coordinator_email}}`, `{{school_naam}}`
+Variabelen in templates: `{{begeleider_naam}}`, `{{leerling_naam}}`, `{{bedrijfsnaam}}`, `{{startdatum}}`, `{{link}}`, `{{coordinator_naam}}`, `{{coordinator_email}}`, `{{school_naam}}`
 
-#### Overige tabellen (minder actief gebruikt)
-- `companies` — stagebedrijven database
-- `academic_years` — schooljaren
-- `audit_logs` — actielog (coordinator acties)
-- `documents` — uploads (nog niet in gebruik)
-- `evaluations` — oudere evaluatietabel (vervangen door evaluation_responses)
-- `skills` + `student_skills` — competenties (nog niet in gebruik)
-- `period_classes` — klassen gekoppeld aan periodes
-
----
-
-## 6. RLS Policies
-
-### Aanpak
-Alle tabellen hebben RLS enabled. Helper functies zijn SECURITY DEFINER.
-
-### Kritieke policies
-
-**profiles:**
-- SELECT: anon + authenticated (iedereen kan profielen lezen binnen school)
-- INSERT: coordinator + service_role
-- UPDATE: coordinator (binnen school) OF student (eigen profiel via user_id)
-- DELETE: coordinator (alleen students)
-
-**placements:**
-- SELECT: authenticated (binnen school)
-- INSERT: authenticated (binnen school)
-- UPDATE: coordinator (alles) OF student (eigen pending/invited/rejected)
-- DELETE: coordinator + super_admin
-
-**hours:**
-- ALL: authenticated (binnen school via school_id)
-
-**assignments, student_assignments, badges, week_stories, stage_periods:**
-- ALL: authenticated (binnen school)
-
-**audit_logs:**
-- INSERT: service_role
-- SELECT: public
-- UPDATE: authenticated (binnen school) — nodig voor ON DELETE SET NULL cascade
-
-### Bekende issue (opgelost)
-`audit_logs` had een FK naar `placements` zonder UPDATE policy, waardoor `ON DELETE SET NULL` cascade faalde bij leerling verwijderen. Dit is opgelost door een UPDATE policy toe te voegen.
+#### Minder gebruikte tabellen
+- `companies` — stagebedrijven (aanwezig, niet actief gebruikt in UI)
+- `academic_years` — schooljaren (aanwezig, FK op placements, niet actief gebruikt)
+- `audit_logs` — actielog (INSERT via service_role, UPDATE voor ON DELETE SET NULL cascade)
+- `documents` — uploads (tabel aanwezig, geen UI)
+- `evaluations` — oudere evaluatietabel (vervangen door `evaluation_responses`)
+- `skills` + `student_skills` — competenties (tabel aanwezig, geen UI)
 
 ---
 
-## 7. API Routes
+## 7. RLS Policies — Volledig Overzicht
 
-Alle server-side routes gebruiken de **service role** Supabase client om RLS te bypassen.
+| Tabel | Policy | Cmd | Rollen |
+|-------|--------|-----|--------|
+| academic_years | academic_years_insert | INSERT | public |
+| academic_years | academic_years_select | SELECT | public |
+| assignments | assignments_school | ALL | authenticated |
+| audit_logs | audit_logs_insert_service | INSERT | service_role |
+| audit_logs | audit_logs_select | SELECT | public |
+| audit_logs | audit_logs_update | UPDATE | authenticated (voor ON DELETE SET NULL) |
+| badges | badges_school | ALL | authenticated |
+| coach_praise | praise_school | ALL | authenticated |
+| companies | companies_insert/select/update | ALL | public |
+| coordinator_invites | coordinator_invites_school | ALL | authenticated |
+| documents | documents_insert/select | INSERT/SELECT | public |
+| email_templates | email_templates_school | ALL | authenticated |
+| evaluation_moments | eval_moments_school | ALL | authenticated |
+| evaluation_responses | eval_responses_school | ALL | authenticated |
+| evaluations | evaluations_insert/select | INSERT/SELECT | public |
+| hours | hours_school | ALL | authenticated |
+| period_classes | period_classes_coordinator | ALL | authenticated (coordinator only) |
+| period_classes | period_classes_select_all | SELECT | anon + authenticated |
+| placements | placements_delete | DELETE | authenticated (coordinator/super_admin) |
+| placements | placements_insert | INSERT | authenticated |
+| placements | placements_select | SELECT | authenticated |
+| placements | placements_update | UPDATE | authenticated |
+| profiles | profiles_inserten_coordinator | INSERT | authenticated |
+| profiles | profiles_inserten_service | INSERT | service_role |
+| profiles | profiles_lezen | SELECT | anon + authenticated |
+| profiles | profiles_updaten | UPDATE | authenticated |
+| profiles | profiles_verwijderen_coordinator | DELETE | authenticated |
+| schools | schools_select | SELECT | public |
+| skills | skills_select | SELECT | public |
+| stage_periods | stage_periods_school | ALL | authenticated |
+| student_assignments | student_assignments_school | ALL | authenticated |
+| student_badges | student_badges_school | ALL | authenticated |
+| student_skills | student_skills_select | SELECT | public |
+| week_stories | week_stories_school | ALL | authenticated |
 
-### `POST /api/import-studenten`
-Importeert leerlingen uit geplakte tekst of CSV.
-- Verwacht: `{ tekst: string, schoolId: string, coordinatorId: string }`
-- Maakt profiel aan **zonder** `user_id` (wordt gekoppeld bij eerste login via trigger)
-- Maakt een `pending` placement aan
+---
 
-### `POST /api/intake`
-Slaat intakeformulier op van anonieme leerling.
-- Verwacht: `{ placementId: string, data: { voornaam, tussenvoegsel, achternaam, telefoon_leerling, bedrijfsnaam, bezoekadres, postcode, plaats, telefoon_bedrijf, email_bedrijf, stagebegeleider, groene_stage } }`
-- Zet placement status naar `review`
-- Werkt zonder authenticatie (leerling is niet ingelogd)
+## 8. API Routes
 
 ### `POST /api/send-invite`
-Stuurt invullink email naar leerling.
-- Verwacht: `{ placementId: string }`
-- Verstuurt via Resend vanuit `noreply@stagepoort.nl`
-- Zet placement status naar `invited`
+Stuurt intake-link email naar leerling.
+- Auth: vereist coordinator sessie via cookies
+- Haalt placement + student + school op via Supabase join
+- Email verstuurd door Resend van `noreply@stagepoort.nl`
+- Zet placement status → `invited` + `invited_at`
+- Terugvalt op 400 als student geen email heeft
 
 ### `POST /api/send-supervisor`
 Stuurt welkomstmail naar stagebegeleider bij goedkeuring.
-- Verwacht: `{ placementId: string }`
-- Haalt email template op uit database
-- Vult variabelen in
-- Verstuurt via Resend
-- Zet placement status naar `active`
+- Auth: vereist coordinator sessie
+- Haalt email template op uit `email_templates` (valt terug op default als niet ingesteld)
+- Vult alle template variabelen in
+- Zet placement status → `active` + `approved_at`
+- Schrijft naar `audit_logs`
+
+### `POST /api/import-studenten`
+Importeert leerlingen uit geplakt of CSV tekst.
+- Auth: vereist coordinator sessie
+- Input: `{ leerlingen: [{naam, email, klas}], schoolId, coordinatorId }`
+- Maakt profiel aan **zonder** `user_id` (trigger koppelt later)
+- Als profiel al bestaat op email: update naam/klas
+- Als al een actieve placement bestaat: sla over
+- Maakt `pending` placement aan
+- Retourneert `{ aangemaakt, overgeslagen }`
+
+### `POST /api/intake` ⚠️
+Slaat intakeformulier op (bedoeld voor anonieme leerling).
+- Input: `{ placementId, data: { voornaam, tussenvoegsel, achternaam, telefoon_leerling, bedrijfsnaam, bezoekadres, postcode, plaats, telefoon_bedrijf, email_bedrijf, stagebegeleider, groene_stage } }`
+- **BUG:** gebruikt anon key zonder service role. Werkt alleen met actieve auth sessie.
+- Zet placement status → `review`
 
 ---
 
-## 8. Functionaliteiten per pagina
+## 9. Coordinator Dashboard — Alle Functies
 
-### `/login`
-Magic link loginpagina. Eenvoudig emailformulier. Werkt voor alle rollen.
+### `/dashboard/coordinator` — Dashboard (gecombineerd met studenten)
 
-### `/auth/callback`
-Client-side callback. Verwerkt magic link token, haalt profiel op, routeert naar juist dashboard.
+**Data geladen:**
+- profiles (studenten van school)
+- placements (alle, incl. completed voor stagehistorie)
+- stage_periods
+- Counts: actieve placements, pending uren
 
-### `/intake/[token]`
-**Anoniem** 4-staps intakeformulier voor leerlingen.
-- token = placement_id
-- Stap 1: Persoonlijke gegevens (voornaam, tussenvoegsel, achternaam, telefoon)
-- Stap 2: Stagebedrijf (naam, adres, postcode, plaats, telefoon, email)
-- Stap 3: Stagebegeleider (naam)
-- Stap 4: Groene stage (ja/nee) + bevestiging
-- Submit via `/api/intake`
-
----
-
-### Coordinator Dashboard (`/dashboard/coordinator`)
-
-**Gecombineerd Dashboard + Studenten:**
-- Begroeting met tijdstip
+**Functies:**
+- Begroeting met tijdstip (goedemorgen/middag/avond)
 - KPI tegels: Studenten / Actieve stages / Uren te keuren / Aandacht nodig
-- Filters: zoekbalk + periode dropdown + klas dropdown + CSV export
-- Status tabs: Alle / Geen stage / Achterstand / Aandacht / Op koers / Bijna klaar
-- Studententabel: naam, klas, status, bedrijf, uren + ✏️ 📧 🗑️ knoppen
-- **Uitklapdetail per student:** student info + bedrijfsinfo + stageperiode + **stagehistorie** (vorige stages)
-- **Edit modal:** naam, email, klas, stageperiode dropdown (koppelt period_id aan placement)
-- **Verwijder:** bevestigingsmodal → verwijdert profiel + placements
-- **🎓 Nieuw schooljaar:** sluit huidige placement af als `completed`, maakt nieuwe `pending` aan
+- Filters: zoek, periode dropdown, klas dropdown
+- Status tabs: Alle / Geen stage / Achterstand / Aandacht / Op koers / Bijna klaar (met counts)
+- CSV export van gefilterde studenten
+- Studententabel met uitklapdetail
+- **Edit modal** — naam, email, klas + stageperiode dropdown (koppelt `period_id` aan placement)
+- **Uitklapdetail** — student info + bedrijfsinfo + stageperiode naam + stagehistorie (completed placements)
+- **Nieuw schooljaar** — sluit actieve placement af als `completed`, maakt nieuwe `pending` aan
+- **Verwijder** — bevestigingsmodal, verwijdert placements dan profiel
 
----
+**Status bepaling `bepaalStatus()`:**
+- pending/invited → 'geen stage'
+- review → 'aandacht'
+- active/halfway → 'op koers'
+- overige → 'geen stage'
 
-### Koppelingen (`/dashboard/coordinator/koppelingen`)
+### `/dashboard/coordinator/koppelingen`
 
-4 secties op basis van placement status:
+**4 secties op basis van placement status:**
 
-**🔴 Link nog versturen (pending)**
-- Leerling is geïmporteerd maar heeft nog geen link
-- Knop: "📨 Stuur invullink" → roept `/api/send-invite` aan
+**🔴 pending** — "Link nog versturen"
+- Knop "📨 Stuur invullink" → `POST /api/send-invite` → status wordt `invited`
 
-**🟡 Wacht op leerling (invited)**
-- Link verstuurd, leerling nog niet ingevuld
+**🟡 invited** — "Wacht op leerling"
+- Leerling heeft link maar nog niet ingevuld
 
-**🟠 Ter beoordeling (review)**
-- Leerling heeft intake ingevuld
-- Uitklapbaar: alle ingevulde gegevens tonen
-- Knoppen: ✅ Goedkeuren (→ `/api/send-supervisor`) | ❌ Afwijzen (met reden)
+**🟠 review** — "Ter beoordeling"
+- Uitklapbaar: alle ingevulde intakegegevens
+- ✅ Goedkeuren → `POST /api/send-supervisor` → status `active`, email naar begeleider
+- ❌ Afwijzen → reden invullen, status `rejected`
 
-**🟢 Actieve koppelingen (active/halfway)**
-- Stage loopt
+**🟢 active/halfway** — "Actieve koppelingen"
 - Uitklapbaar: alle gegevens
-- Knop: "✏️ Gegevens aanpassen" → aanpassen modal (alle intake velden + groene stage)
+- ✏️ "Gegevens aanpassen" modal — alle intake velden + groene stage toggle
 
-**Import leerlingen (onderaan):**
-- Tekstvak: plak naam + email + klas (tab-separated of kommagescheiden)
-- Preview tabel → "Importeer X leerlingen" → roept `/api/import-studenten` aan
+**Import (onderaan pagina):**
+- Tab "Kopiëren & plakken": tekstvak, herkent tabs/komma's/nieuwe regels als separator
+- Tab "CSV uploaden": file input, parseert CSV
+- Preview tabel → "Importeer X leerlingen" → `POST /api/import-studenten`
 
----
+### `/dashboard/coordinator/beoordelen`
 
-### Beoordelen (`/dashboard/coordinator/beoordelen`)
+**Tab ⏱ Uren keuren** (badge teller toont aantal pending):
+- Query: `hours WHERE status = 'pending' AND school_id`
+- Per regel: initialen avatar, naam + klas + bedrijf, datum, uren, omschrijving
+- ✅ Goedkeuren: `status = 'approved'`, `approved_by`, `approved_at`
+- ❌ Afwijzen: textarea voor reden, `status = 'rejected'`, `rejection_reason`
+- "Keur alles goed" bulk: `.in('id', ids)`
 
-**Tab: ⏱ Uren keuren**
-- Alle pending uren in de school
-- Per regel: leerlingnaam + klas + bedrijf, datum, omschrijving, uren
-- ✅ Goedkeuren | ❌ Afwijzen (met reden, zichtbaar voor leerling)
-- "Keur alles goed" bulk knop
-- Badge teller in tab
+**Tab 📁 Opdrachten beoordelen** (badge teller):
+- Query: `student_assignments WHERE status = 'submitted' AND school_id`
+- Uitklapbaar: antwoord leerling
+- Cijfer 1-10 + voldoende/onvoldoende indicator
+- Feedback tekstveld
+- Opslaan: `status = 'graded'`, `grade`, `graded_by`, `graded_at`, `feedback`
 
-**Tab: 📁 Opdrachten beoordelen**
-- Alle ingediende (submitted) opdrachten
-- Uitklapbaar: antwoord leerling, cijfer 1-10 invullen, feedback
-- Voldoende/onvoldoende indicator
-- Badge teller in tab
+### `/dashboard/coordinator/opdrachten`
 
----
-
-### Opdrachten (`/dashboard/coordinator/opdrachten`)
-
-**Periode tabs** bovenaan (switchen tussen Leerjaar 3 / Leerjaar 4 etc.)
+**Periode tabs** — switcht actieve periode ID
 
 **Opdrachten per periode:**
-- Lijst met titel, omschrijving preview, deadline, aantal vragen, XP
-- Uitklapbare editor:
-  - Titel, deadline, XP beloning, weging
+- Filter: `assignments WHERE period_id = actievePeriode AND school_id`
+- "+ Nieuwe opdracht" → insert met lege defaults
+- Uitklapbare editor per opdracht:
+  - Titel, deadline, XP reward, weging
   - Omschrijving
-  - Vragen editor: vraagtekst, hint (optioneel), punten per vraag
+  - Vragen editor: vraagtekst, hint, punten per vraag (opgeslagen als JSONB `questions`)
+- Normering sectie: tabel met max punten (som vraagpunten) + weging per opdracht
+  - Weging direct bewerkbaar en auto-saved via `onBlur`
+  - Formule: `cijfer = 1 + 9 × (behaald / max)`
 
-**Punten & Normering:**
-- Tabel: opdracht, max punten (som van vraagpunten), weging
-- Formule: `cijfer = 1 + 9 × (behaald / max)`
-
-**Evaluatievragen stagebegeleider:**
-- Tabs: Tussenevaluatie | Eindevaluatie | + Nieuw toetsmoment
-- Per toetsmoment: naam, week-label, vragen (type: slider/sterren/tekst)
+**Evaluatievragen:**
+- Tabs per evaluatiemoment (tussenevaluatie/eindevaluatie/custom)
+- Per vraag: type (slider/sterren/tekst), vraagtekst
+- + Vraag toevoegen, + Nieuw toetsmoment
 
 **Badges:**
-- Alle badges aanpasbaar: emoji, naam, drempel
-- + Nieuwe badge toevoegen
+- Alle school badges: emoji, naam, drempel aanpasbaar
+- + Nieuwe badge toevoegen, verwijderen
 
----
+### `/dashboard/coordinator/beheer`
 
-### Beheer (`/dashboard/coordinator/beheer`)
-
-**Tab: 📅 Stageperiodes**
-- Overzicht tabel: naam, looptijd, urendoel
-- Nieuw aanmaken: naam, urendoel, startdatum, einddatum
+**Tab 📅 Stageperiodes:**
+- Overzicht: naam, looptijd, urendoel
+- Aanmaken: naam + urendoel + startdatum + einddatum
 - Verwijderen
 
-**Tab: 👥 Mede-coördinatoren**
-- Email invoeren + welke periode ze beheren
-- Uitnodigen → staat in `coordinator_invites`
-- Overzicht met status (Verstuurd / Geactiveerd) + Herinnering knop
+**Tab 👥 Mede-coördinatoren:**
+- Email + periode → insert in `coordinator_invites`
+- Overzicht: email, periode, status (Verstuurd/Geactiveerd)
+- Herinnering knop (toont toast, verstuurt nog geen echte mail)
 
-**Tab: 📧 E-mailtemplate**
-- Onderwerp + berichttekst bewerken
-- Klik op variabele om toe te voegen aan tekst
-- Preview: zo ziet de begeleider de mail
-- Opslaan per school
-
----
-
-### Student Dashboard (`/dashboard/student`)
-
-**Donker thema** (#0B0F14 achtergrond, #F26B1D oranje accent). TikTok/Instagram-stijl. Bottom navigation bar.
-
-**Tab: 🧭 Mijn stage**
-- Hero: avatar initialen, naam, Yo [voornaam] 👋
-- Statistieken: streak 🔥 / XP + level / goedgekeurde uren
-- XP voortgangsbalk naar volgend level (300 XP per level)
-- Stagecoach kaartje + stagebegeleider kaartje
-- Stageroute: Gestart → Uren & opdrachten → Tussenevaluatie → Eindgesprek
-- Badges grid: behaald = oranje glow, vergrendeld = grijs met voortgangsbalkje
-- **Klassement** (scrollbaar):
-  - Tabs: 🏫 School / 👥 Mijn klas
-  - Types: ⚡ XP / 🔥 Streak
-  - Eigen positie gemarkeerd (ook op plek 50)
-  - Alleen scores zichtbaar — nooit cijfers of reflecties
-- Laatste 3 uren onderaan
-
-**Tab: ⏱ Uren**
-- Formulier: datum, aantal uren, omschrijving → indienen
-- Weekoverzicht met statussen: Wacht op goedkeuring / Goedgekeurd / Afgekeurd (met reden)
-
-**Tab: 📁 Opdrachten**
-- Lijst van coordinator-opdrachten per periode
-- Open → "Start opdracht + XP" knop → uitklapbaar tekstveld
-- Ingeleverd → wacht op beoordeling
-- Beoordeeld → cijfer + feedback zichtbaar
-- Bij inleveren: XP direct bijgewerkt in UI
-
-**Tab: ✨ Weekstory**
-- 4 swipe-stappen met voortgangsbalkjes
-- Stap 1: Mood emoji kiezen (5 opties: 😴😐🙂😎🔥)
-- Stap 2: Tofste moment
-- Stap 3: Waar tegenaan gelopen
-- Stap 4: Wat volgende week anders
-- +100 XP animatie bij verzenden
-- Streak +1, level berekend, alles direct in UI bijgewerkt
-- Overzicht eerdere weken
+**Tab 📧 E-mailtemplate:**
+- Bewerkt `email_templates` voor `type = 'supervisor_welcome'`
+- Variabelen sidebar: klik om toe te voegen aan body tekst
+- Preview knop: vult VOORBEELD waarden in en toont HTML render
+- Opslaan: upsert (insert als nieuw, update als bestaat)
 
 ---
 
-### Coach Dashboard (`/dashboard/coach`)
+## 10. Student Dashboard — Alle Functies
 
-Licht thema (coordinator-stijl). Horizontale tab-navigatie in header.
+**Thema:** Donker (#0B0F14 bg, #F26B1D oranje). Bottom navigation bar (4 tabs).
 
-**Tab: 🧭 Mijn studenten**
-- KPI tegels: Mijn studenten / Op koers / Actie nodig
-- Per student een kaart:
-  - Voortgangsbalk uren (altijd zichtbaar)
-  - 🚨 Slimme alerts:
-    - Rode tag: geen uren 2+ weken
-    - Oranje tag: deadline gemist
-    - Grijze tag: nog geen stage
-  - Uitklapbaar:
-    - Stageroute (4 stappen)
-    - Leerling info (naam, klas, telefoon, email)
-    - Bedrijf info (naam, begeleider, adres, **Google Maps link**, telefoon, email)
-    - Weekstory preview (laatste week, mood + antwoorden)
-    - 👊 **Goed bezig** knop (max 3x, bijgehouden in `coach_praise`)
-    - 📧 Mail student knop
+**Data geladen bij init:**
+- Profile (eigen), placement (niet cancelled/completed, meest recent)
+- Badges + student_badges
+- Hours (eigen)
+- Assignments (school) + student_assignments (eigen)
+- Week stories (eigen, desc)
+- Klassement (alle students van school: id, name, xp, streak, klas)
 
-**Tab: ✅ Nakijken**
-- Nakijkstapel (alleen eigen studenten)
-- Nakijkscherm:
-  - Per vraag: vraagtekst + antwoord leerling + punten knoppen (0 tot max)
-  - Cijfer live berekend: `1 + 9 × (behaald / max)`, sticky header
-  - Feedback tekstveld
-  - Knop "Cijfer vaststellen" → zichtbaar voor student + coordinator
+### Tab 🧭 Mijn stage
 
-**Tab: 📋 Evaluaties**
-- Per student kaart met alle evaluatiemomenten
-- Status per moment: ✅ Ingevuld / ⏳ Nog te doen
-- Invulscherm:
-  - Slider (1-10)
-  - Sterren (Onvoldoende/Voldoende/Goed/Uitstekend)
-  - Tekstveld
-- Digitaal ondertekenen bij opslaan
-- Opgeslagen in `evaluation_responses`
+**Hero blok:**
+- Avatar met initialen, "Yo [voornaam] 👋"
+- Bedrijfsnaam + begeleider naam
+- 3 statistieken: streak 🔥 / XP + level / goedgekeurde uren van max uren
+- XP voortgangsbalk: `300 XP per level`, level = `floor(xp/300)+1`
 
-**Tab: 📝 Inschrijven**
-- Tabel van alle actieve placements in school
-- Status: Jij / Nog vrij / Andere coach (naam)
-- Inschrijven / Uitschrijven met één klik
-- Update `placements.coach_id` + `coach_name` + `coach_email`
+**Kaartjes:**
+- Stagecoach: naam + email + "✉️ Mail coach" knop
+- Stagebegeleider: naam + bedrijf + "📨 Link opnieuw" knop (alleen visueel, geen functie)
+
+**Stageroute** (4 stappen visueel): Gestart → Uren & opdrachten → Tussenevaluatie → Eindgesprek
+
+**Badges grid:**
+- Behaald: oranje glow border
+- Niet behaald: grijs met voortgangsbalkje (hours: goedgekeurde uren / drempel, streak: streak / drempel)
+
+**Klassement:**
+- Tabs: 🏫 School / 👥 Mijn klas (filter op `klas = profile.klas`)
+- Types: ⚡ XP / 🔥 Streak (gesorteerd desc)
+- Eigen positie gemarkeerd in oranje
+- Volledig scrollbaar (niet beperkt)
+- Disclaimer: "Alleen scores zichtbaar — nooit cijfers of reflecties"
+
+**Laatste uren** (3 meest recente, met status badge)
+
+### Tab ⏱ Uren
+
+**Formulier:** datum + uren (step 0.5) + omschrijving → insert in `hours`
+- Vereist placement.id (placement wordt bij alle statussen geladen behalve cancelled/completed)
+- Direct toevoegen aan lokale state
+
+**Weekoverzicht:** gegroepeerd per weeknummer, met statussen:
+- Wacht op goedkeuring (geel), Goedgekeurd (groen), Afgekeurd (rood + rejection_reason)
+
+### Tab 📁 Opdrachten
+
+- Lijst van `assignments` gefilterd op `school_id` + `period_id` van actieve placement
+- Per opdracht: titel, omschrijving, deadline, status
+- Open: "Start opdracht +[xp] XP ⚡" → uitklapbaar tekstveld → inleveren
+  - Upsert `student_assignments` met `status = 'submitted'`
+  - XP update: `profiles.xp += xp_reward`, level herberekend
+  - Beide direct bijgewerkt in lokale state via `setProfile` prop
+- Ingeleverd: "Ingeleverd" badge
+- Beoordeeld: cijfer + eventuele feedback
+
+### Tab ✨ Weekstory
+
+**4 swipe-stappen:**
+1. Mood emoji kiezen (😴😐🙂😎🔥)
+2. Tofste moment (tekst)
+3. Waar tegenaan gelopen (tekst)
+4. Wat volgende week anders (tekst)
+
+**Bij verzenden:**
+- Insert in `week_stories`
+- `profiles.xp += 100`, `profiles.streak += 1`, level herberekend
+- `profiles.last_story_week` + `profiles.last_story_year` bijgewerkt
+- +100 XP animatie
+- Alles direct bijgewerkt in lokale state via `setProfile` prop
+
+**Na invullen:** overzicht van eerdere weken (mood + highlight)
 
 ---
 
-## 9. Gamification
+## 11. Coach Dashboard — Alle Functies
+
+**Thema:** Licht (coordinator-stijl, #F7F3EE bg). Horizontale tab-navigatie in sticky header.
+
+**Data geladen:**
+- Coach profile
+- Alle placements van school (niet cancelled/completed)
+- Alle studenten van school
+- Alle uren van school
+- Alle assignments van school
+- Ingeleverde student_assignments (status = submitted)
+- Evaluation_moments + evaluation_responses
+- Coach_praise (eigen)
+- Week_stories (alle, gesorteerd desc)
+
+### Tab 🧭 Mijn studenten
+
+Filter: `placements WHERE coach_id = profile.id`
+
+**KPI tegels:** Mijn studenten / Op koers / Actie nodig
+
+**Per student kaart:**
+- Voortgangsbalk uren (goedgekeurd / hours_required) altijd zichtbaar
+- Slimme alerts (berekend client-side):
+  - 🔴 Geen uren 2+ weken: laatste `hours.created_at` ouder dan 14 dagen
+  - 🟠 Deadline gemist: `assignments.deadline < today` + geen student_assignment voor die opdracht
+  - Grijs: Nog geen stage (geen company_name)
+- Uitklapbaar:
+  - Stageroute visueel (fase bepaald door placement.status)
+  - Leerling info: naam, klas, telefoon, email (als link)
+  - Bedrijf info: naam, begeleider, adres als **Google Maps link**, telefoon, email
+  - Weekstory preview: meest recente week, mood + antwoord_1 + antwoord_2
+  - 👊 Goed bezig knop:
+    - Leest `coach_praise WHERE coach_id = profile.id AND student_id = student.id`
+    - Max 3x per student: als count >= 3 → disabled
+    - Increment count in `coach_praise` (upsert)
+  - 📧 Mail student (mailto link)
+
+### Tab ✅ Nakijken
+
+Filter: `student_assignments WHERE status = 'submitted'` + student in mijn placements.
+
+**Nakijkstapel:** tabel met student, opdracht, indiendatum, max punten, "Nakijken" knop
+
+**Nakijkscherm (per opdracht):**
+- Sticky header: opdrachtnaam + student + `behaald / max punten` + live cijfer
+- Per vraag uit `assignments.questions` JSONB:
+  - Vraagtekst + antwoord uit `student_assignments.answer`
+  - Punten knoppen (0 tot max per vraag)
+- Als geen vragen (max_points-only): direct cijfer 1-10 invullen
+- Feedback tekstveld
+- Formule: `cijfer = 1 + 9 × (behaald / max)`, altijd 1 decimaal
+- "Cijfer vaststellen" → update `student_assignments`: `status = 'graded'`, `grade`, `graded_by`, `graded_at`, `feedback`
+
+### Tab 📋 Evaluaties
+
+Per student (met company_name) een kaart met alle evaluatiemomenten.
+
+**Per moment:**
+- Status: ✅ Ingevuld (groen) / ⏳ Nog te doen (oranje)
+- Knop: "Invullen" of "Bekijken/Bewerken"
+
+**Invulscherm per moment:**
+- Vragen uit `evaluation_moments.questions` JSONB:
+  - `slider` → range input 1-10, toont getal
+  - `sterren` → 4 knoppen (Onvoldoende/Voldoende/Goed/Uitstekend met ⭐⭐⭐⭐)
+  - `tekst` → textarea
+- Antwoorden opgeslagen als `{0: waarde, 1: waarde, ...}` in `evaluation_responses.responses`
+- "Opslaan & Ondertekenen" → upsert `evaluation_responses` + `coach_signed_at`
+
+### Tab 📝 Inschrijven
+
+Tabel van alle actieve placements in school (niet pending/cancelled/completed).
+
+**Per rij:** student naam+klas, bedrijf, huidige coach status:
+- 👋 Jij (oranje) — coach is al ingeschreven
+- [coach naam] (blauw) — andere coach
+- Nog vrij (groen) — geen coach
+
+**Acties:**
+- "Schrijf mij in": update `placements.coach_id = profile.id`, `coach_name`, `coach_email`
+- "Uitschrijven": set `coach_id/coach_name/coach_email = null`
+- Lokale state direct bijgewerkt
+
+---
+
+## 12. Gamification Systeem
 
 | Element | Hoe het werkt |
 |---------|---------------|
-| XP | Weekstory +100, Opdracht inleveren = `xp_reward` van opdracht |
-| Level | 300 XP per level, berekend als `floor(xp / 300) + 1` |
-| Streak | +1 bij elke weekstory, wordt opgeslagen in `profiles.streak` |
-| Badges | 9 types: streak/hours/assignments/grade/weekstory/manual |
-| Klassement | Gebaseerd op `profiles.xp` en `profiles.streak`, gefilterd op school of klas |
+| XP | Weekstory +100, Opdracht inleveren +xp_reward van opdracht |
+| Level | `floor(xp / 300) + 1`, bijgewerkt bij elke XP mutatie |
+| Streak | +1 per weekstory, opgeslagen in `profiles.streak` |
+| Badges | 9 types, coordinator aanpasbaar |
+| Klassement | `profiles.xp` en `profiles.streak`, school of klas |
 
-**Let op:** Badge-toekenning is nog niet geautomatiseerd. Drempels zijn opgeslagen in `badges.threshold` maar er is nog geen achtergrondproces dat checkt of een badge behaald is.
+### Badge types
+| Type | Drempel betekenis |
+|------|-------------------|
+| streak | Aantal weken streak |
+| hours | Aantal goedgekeurde uren |
+| assignments | Aantal ingeleverde opdrachten |
+| grade | Minimaal cijfer (bijv. drempel 8 = eerste 8+) |
+| weekstory | Niet actief gebruikt |
+| manual | Handmatig toe te kennen (nog geen UI) |
 
----
-
-## 10. Testdata
-
-**School:** ROC Rotterdam
-- School ID: `00000000-0000-0000-0000-000000000001`
-
-**Coordinator:**
-- Yusuf Bagcivan
-- Email: `yusuf.bagcivan@hotmail.com` of `cucuf@live.nl`
-- Profile ID: `0fc5500d-a299-4496-a7f1-be9ccef06657`
-
-**Test studenten:**
-- Jan (`cucuf00@gmail.com`) — klas 3F
-- mkmk (`ybagcivan01@lentiz.nl`) — klas 3f
-- Yusu (`zm@live.nl`) — klas B6G — heeft `user_id` gekoppeld, 100 XP, streak 1
-- Yuf Deir (`ybagcivan01@lentiz.nl`)
-- Yusuf Demir (`yusuf.bagcivan@hotmail.com`) — klas SD4B
+> ⚠️ **Badge-toekenning is niet geautomatiseerd.** Drempels zijn opgeslagen maar er is geen trigger of achtergrondproces.
 
 ---
 
-## 11. Bekende Limitaties & TODO
+## 13. Intakeformulier (`/intake/[token]`)
 
-### Nog niet gebouwd
-- [ ] **Stagebegeleider dashboard** — begeleider op bedrijf heeft eigen portaal (`/begeleider/[placement_id]`) maar die pagina bestaat nog niet
-- [ ] **Automatische badge-toekenning** — badges hebben een drempel maar er is geen achtergrondproces
-- [ ] **Coach toewijzen via coordinator** — coach kan zichzelf inschrijven via inschrijven-tab, maar coordinator kan geen coach toewijzen
-- [ ] **Uren zichtbaar in coordinator dashboard** — de "uren" kolom toont altijd "0 / X u" (echte data niet opgehaald)
-- [ ] **Notifications/reminders** — geen pushnotificaties of email reminders
-- [ ] **Super admin dashboard** — multi-school beheer
-- [ ] **Onboarding voor nieuwe scholen** — handmatig aanmaken
+Token = placement_id. Anonieme pagina (geen login vereist).
 
-### Technische schuld
-- `assignments` tabel heeft twee parallelle systemen: oud (`placement_id`, `status`, `answer`) en nieuw (`period_id`, `questions jsonb`). Nieuwe code gebruikt het nieuwe systeem.
-- `CoordinatorLayout.js` gebruikt `window.location.href` (harde navigatie) i.p.v. Next.js `Link` component vanwege cache-issues.
-- `studenten/page.js` bestaat nog maar is vervangen door de gecombineerde `coordinator/page.js`. De aparte studenten pagina is dead code.
-- Middleware is leeg — auth is volledig client-side per pagina.
+**4 stappen:**
+1. Persoonlijk: voornaam, tussenvoegsel, achternaam, telefoonnummer
+2. Stagebedrijf: naam, bezoekadres, postcode, plaats, telefoon, email
+3. Stagebegeleider: naam
+4. Bevestiging + groene stage vraag (ja/nee knoppen)
 
-### Bekende workarounds
-- **Intake is server-side** via `/api/intake` omdat leerling niet ingelogd is en directe Supabase call geblokkeerd wordt door RLS
-- **Import is server-side** via `/api/import-studenten` om profielen zonder `user_id` te kunnen aanmaken
+**Bij laden:** plaatst eerst een SELECT op placement om:
+- Te checken of token geldig is
+- Pre-fill formulier als al eerder ingevuld (bijv. na afwijzing)
+- Foutmelding als status niet pending/invited/rejected is
+
+**Bij verzenden:** `POST /api/intake` (zie bug #1!)
 
 ---
 
-## 12. Deployment
+## 14. Deployment & Configuratie
 
 ### Vercel
-- Automatische deploy bij push naar `main` branch
-- Environment variables ingesteld in Vercel dashboard
+- Automatisch deploy bij push naar `main` branch van `github.com/cucuf00/stagepoort`
+- Alle env vars in Vercel dashboard ingesteld
+- `next.config.ts` is leeg (geen speciale configuratie)
+- Geen middleware actief (middleware.js is leeg)
 
-### Supabase
-- Auth provider: Email (magic link)
-- SMTP: Resend (`smtp.resend.com:465`, SSL)
-- Auth callback URL: `https://stagepoort.vercel.app/auth/callback`
+### Supabase Auth
+- Email Auth provider: magic link ingeschakeld
+- SMTP: custom via Resend
+- Callback URL: `https://stagepoort.vercel.app/auth/callback`
+- Auth rate limits: standaard Supabase instellingen
 
----
-
-## 13. Volgend te bouwen (prioriteit)
-
-1. **Uren ophalen in coordinator dashboard** — de tabel toont nu `0 / X u`, echte goedgekeurde uren query moet worden toegevoegd
-2. **Stagebegeleider dashboard** — `/begeleider/[placement_id]` — begeleider keurt uren goed en vult evaluaties in
-3. **Automatische badge-toekenning** — na goedkeuring uren / na inleveren opdracht / na weekstory check of drempel bereikt
-4. **Coach toewijzen door coordinator** — dropdown in edit modal van student
-5. **Opnieuw uitnodigen knop** — op koppelingenpagina voor verlopen magic links
-6. **Stagehistorie per leerling** — al deels gebouwd (completed placements worden getoond in uitklapdetail)
+### Navigation
+- Coordinator gebruikt `CoordinatorLayout.js` sidebar
+- Navigatie via `window.location.href` (harde navigatie) i.p.v. Next.js `router.push` of `Link` — om cache-problemen te vermijden
 
 ---
 
-*Dit document is gegenereerd op 13 juni 2026 op basis van de live codebase en database.*
+## 15. Wat Nog Niet Gebouwd Is (Prioriteit)
+
+### Kritiek (werkt niet zonder fix)
+1. **Intake flow voor anonieme studenten** — fix bug #1 (anon RLS policies of service role key)
+
+### Hoog (core functionaliteit mist)
+2. **Uren ophalen in coordinator dashboard** — tabel toont altijd `0 / X u`
+3. **Stagebegeleider dashboard** — `/begeleider/[placement_id]` bestaat niet; begeleider kan nergens inloggen
+4. **Automatische badge-toekenning** — triggers of achtergrondproces bij XP/uren/opdrachten drempel
+
+### Middel
+5. **Coach toewijzen door coordinator** — coordinator kan coach_id niet instellen; coach schrijft zichzelf in
+6. **Opnieuw uitnodigen knop** — als magic link verlopen is (geen UI op koppelingenpagina)
+7. **Herinnering mede-coördinator** — knop bestaat maar verstuurt geen echte email
+8. **Weekstory bevestiging** — na weekstory staat "+100 XP" animatie maar het profielpaneel (streak, XP) in "Mijn stage" tab wordt pas bijgewerkt na tab-wissel, niet live
+
+### Laag
+9. **Dead code opruimen** — verwijder `StudentenClient.js`, `StudentClient.js`, `studenten/page.js`
+10. **Super admin dashboard** — multi-school beheer
+11. **Bulk email herinnering** — via selectiebalk in studententabel
+12. **Auto-email bij uren ingediend** — email naar stagebegeleider/coach
+
+---
+
+*Handover v2 — 13 juni 2026 — volledig gecontroleerd aan de hand van live codebase, database schema en RLS policies.*
