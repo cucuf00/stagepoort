@@ -625,6 +625,10 @@ export default function StudentDashboard() {
         .eq('user_id', session.user.id).limit(1).maybeSingle()
 
       if (!prof || prof.role !== 'student') { router.replace('/login'); return }
+
+      // Student zonder klas → onboarding
+      if (!prof.klas) { router.replace('/onboarding'); return }
+
       setProfile(prof)
 
       const [

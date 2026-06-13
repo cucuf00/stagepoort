@@ -46,7 +46,9 @@ export default function BeheerPage() {
 
   // Periodes state
   const [periodes, setPeriodes] = useState([])
-  const [nieuwePeriode, setNieuwePeriode] = useState({ name: '', start_date: '', end_date: '', hours_goal: 160 })
+  const [periodKlassen, setPeriodKlassen] = useState({}) // { period_id: ['SD3A','SD3B'] }
+  const [editPeriodeKlassen, setEditPeriodeKlassen] = useState({}) // { period_id: 'SD3A, SD3B' } tijdens bewerken
+  const [nieuwePeriode, setNieuwePeriode] = useState({ name: '', start_date: '', end_date: '', hours_goal: 160, klassen: '' })
   const [periodeBezig, setPeriodeBezig] = useState(false)
 
   // Mede-coordinatoren state
@@ -66,15 +68,24 @@ export default function BeheerPage() {
       if (!prof || prof.role !== 'coordinator') { router.replace('/login'); return }
       setProfile(prof)
 
-      const [{ data: tmpl }, { data: pers }, { data: inv }] = await Promise.all([
+      const [{ data: tmpl }, { data: pers }, { data: inv }, { data: pkl }] = await Promise.all([
         supabase.from('email_templates').select('*').eq('school_id', prof.school_id).eq('type', 'supervisor_welcome').maybeSingle(),
         supabase.from('stage_periods').select('*').eq('school_id', prof.school_id).order('start_date'),
         supabase.from('coordinator_invites').select('*, stage_periods(name)').eq('school_id', prof.school_id).order('invited_at', { ascending: false }),
+        supabase.from('period_classes').select('*').eq('school_id', prof.school_id),
       ])
 
       if (tmpl) { setTemplate({ subject: tmpl.subject, body: tmpl.body }); setTemplateId(tmpl.id) }
       setPeriodes(pers ?? [])
       setInvites(inv ?? [])
+
+      // Groepeer klassen per period_id
+      const klassenMap = {}
+      ;(pkl ?? []).forEach(pc => {
+        if (!klassenMap[pc.period_id]) klassenMap[pc.period_id] = []
+        klassenMap[pc.period_id].push(pc.klas)
+      })
+      setPeriodKlassen(klassenMap)
       setLoading(false)
     }
     load()
@@ -100,6 +111,16 @@ export default function BeheerPage() {
     setTemplateBezig(false)
   }
 
+  // Helper: parse comma-separated klassen string naar array
+  function parseKlassen(tekst) {
+    return [...new Set(
+      (tekst || '')
+        .split(/[,\n]/)
+        .map(k => k.trim().toUpperCase())
+        .filter(Boolean)
+    )]
+  }
+
   // Periode aanmaken
   async function maakPeriode() {
     if (!nieuwePeriode.name || !nieuwePeriode.start_date || !nieuwePeriode.end_date) return
@@ -113,12 +134,63 @@ export default function BeheerPage() {
       hours_goal: parseInt(nieuwePeriode.hours_goal) || 160,
       created_by: profile.id,
     }).select().single()
-    if (!error) {
-      setPeriodes(prev => [...prev, data])
-      setNieuwePeriode({ name: '', start_date: '', end_date: '', hours_goal: 160 })
-      showToast('✅ Periode aangemaakt!')
-    } else showToast('❌ ' + error.message, false)
+
+    if (error) { showToast('❌ ' + error.message, false); setPeriodeBezig(false); return }
+
+    // Klassen koppelen aan deze periode
+    const klassenArray = parseKlassen(nieuwePeriode.klassen)
+    if (klassenArray.length > 0) {
+      const rows = klassenArray.map(klas => ({
+        school_id: profile.school_id,
+        period_id: data.id,
+        klas: klas,
+      }))
+      const { error: klErr } = await supabase.from('period_classes').insert(rows)
+      if (klErr) {
+        showToast('⚠️ Periode aangemaakt, maar klassen koppelen mislukte: ' + klErr.message, false)
+      } else {
+        setPeriodKlassen(prev => ({ ...prev, [data.id]: klassenArray }))
+      }
+    }
+
+    setPeriodes(prev => [...prev, data])
+    setNieuwePeriode({ name: '', start_date: '', end_date: '', hours_goal: 160, klassen: '' })
+    showToast('✅ Periode aangemaakt!')
     setPeriodeBezig(false)
+  }
+
+  // Klassen van bestaande periode bijwerken
+  async function slaKlassenOp(periodId) {
+    const tekst = editPeriodeKlassen[periodId]
+    if (tekst === undefined) return
+    const nieuweKlassen = parseKlassen(tekst)
+    const huidigeKlassen = periodKlassen[periodId] || []
+
+    const supabase = createClient()
+
+    // Verwijder klassen die niet meer in de nieuwe lijst staan
+    const teVerwijderen = huidigeKlassen.filter(k => !nieuweKlassen.includes(k))
+    if (teVerwijderen.length > 0) {
+      await supabase.from('period_classes').delete()
+        .eq('period_id', periodId)
+        .in('klas', teVerwijderen)
+    }
+
+    // Voeg nieuwe klassen toe
+    const toeTeVoegen = nieuweKlassen.filter(k => !huidigeKlassen.includes(k))
+    if (toeTeVoegen.length > 0) {
+      const rows = toeTeVoegen.map(klas => ({
+        school_id: profile.school_id,
+        period_id: periodId,
+        klas: klas,
+      }))
+      const { error } = await supabase.from('period_classes').insert(rows)
+      if (error) { showToast('❌ ' + error.message, false); return }
+    }
+
+    setPeriodKlassen(prev => ({ ...prev, [periodId]: nieuweKlassen }))
+    setEditPeriodeKlassen(prev => { const next = { ...prev }; delete next[periodId]; return next })
+    showToast('✅ Klassen bijgewerkt')
   }
 
   // Verwijder periode
@@ -215,24 +287,53 @@ export default function BeheerPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#F7F3EE' }}>
-                      {['Periode', 'Looptijd', 'Urendoel', ''].map(h => (
+                      {['Periode', 'Looptijd', 'Urendoel', 'Gekoppelde klassen', ''].map(h => (
                         <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#5C6B7A', textTransform: 'uppercase', letterSpacing: '.05em' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {periodes.map(p => (
-                      <tr key={p.id} style={{ borderTop: '1px solid #E4DDD4' }}>
-                        <td style={{ padding: '14px 20px', fontWeight: 600, fontSize: 14 }}>{p.name}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 13, color: '#5C6B7A' }}>{fmtDatum(p.start_date)} – {fmtDatum(p.end_date)}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 13, fontWeight: 700, color: '#0E3A5C' }}>{p.hours_goal} uur</td>
-                        <td style={{ padding: '14px 20px' }}>
-                          <button onClick={() => verwijderPeriode(p.id)} style={{ padding: '5px 12px', background: '#FAEAE7', border: 'none', borderRadius: 8, color: '#C03020', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-                            Verwijderen
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {periodes.map(p => {
+                      const klassenLijst = periodKlassen[p.id] || []
+                      const isEditingKlassen = editPeriodeKlassen[p.id] !== undefined
+                      return (
+                        <tr key={p.id} style={{ borderTop: '1px solid #E4DDD4' }}>
+                          <td style={{ padding: '14px 20px', fontWeight: 600, fontSize: 14 }}>{p.name}</td>
+                          <td style={{ padding: '14px 20px', fontSize: 13, color: '#5C6B7A' }}>{fmtDatum(p.start_date)} – {fmtDatum(p.end_date)}</td>
+                          <td style={{ padding: '14px 20px', fontSize: 13, fontWeight: 700, color: '#0E3A5C' }}>{p.hours_goal} uur</td>
+                          <td style={{ padding: '14px 20px' }}>
+                            {isEditingKlassen ? (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  value={editPeriodeKlassen[p.id]}
+                                  onChange={e => setEditPeriodeKlassen(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                  placeholder="SD3A, SD3B"
+                                  style={{ padding: '6px 10px', border: '1.5px solid #E4DDD4', borderRadius: 6, fontSize: 13, fontFamily: 'Inter,sans-serif', flex: 1, outline: 'none' }}
+                                />
+                                <button onClick={() => slaKlassenOp(p.id)} style={{ padding: '6px 10px', background: '#1A7F52', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>✓</button>
+                                <button onClick={() => setEditPeriodeKlassen(prev => { const n = { ...prev }; delete n[p.id]; return n })} style={{ padding: '6px 10px', background: '#F0EDE8', border: 'none', borderRadius: 6, color: '#5C6B7A', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>✕</button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                                {klassenLijst.length === 0 ? (
+                                  <span style={{ fontSize: 12, color: '#5C6B7A', fontStyle: 'italic' }}>Geen klassen</span>
+                                ) : (
+                                  klassenLijst.map(k => (
+                                    <span key={k} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 12, background: '#E8F0F6', color: '#0E3A5C' }}>{k}</span>
+                                  ))
+                                )}
+                                <button onClick={() => setEditPeriodeKlassen(prev => ({ ...prev, [p.id]: klassenLijst.join(', ') }))} style={{ marginLeft: 4, padding: '3px 8px', background: 'transparent', border: '1px dashed #E4DDD4', borderRadius: 6, color: '#5C6B7A', fontSize: 11, cursor: 'pointer' }}>✏️ Bewerken</button>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '14px 20px' }}>
+                            <button onClick={() => verwijderPeriode(p.id)} style={{ padding: '5px 12px', background: '#FAEAE7', border: 'none', borderRadius: 8, color: '#C03020', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                              Verwijderen
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -242,7 +343,7 @@ export default function BeheerPage() {
             <div style={{ background: '#fff', border: '1px solid #E4DDD4', borderRadius: 12, padding: 24 }}>
               <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>+ Nieuwe periode aanmaken</div>
               <p style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 20, lineHeight: 1.6 }}>
-                Elke periode heeft eigen datums, een eigen urendoel en een eigen opdrachtenset. Leerjaar 3 en 4 kunnen zo tegelijk naast elkaar lopen.
+                Elke periode heeft eigen datums, een eigen urendoel en gekoppelde klassen. Leerlingen kiezen bij eerste login hun klas en worden dan automatisch aan de juiste periode gekoppeld.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
                 <div>
@@ -261,6 +362,11 @@ export default function BeheerPage() {
                   <label style={labelStyle}>Einddatum</label>
                   <input type="date" value={nieuwePeriode.end_date} onChange={e => setNieuwePeriode(p => ({ ...p, end_date: e.target.value }))} style={inputStyle} />
                 </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Klassen — gescheiden door komma's</label>
+                <input value={nieuwePeriode.klassen} onChange={e => setNieuwePeriode(p => ({ ...p, klassen: e.target.value }))} placeholder="Bijv. SD3A, SD3B, SD3C" style={inputStyle} />
+                <div style={{ fontSize: 11, color: '#5C6B7A', marginTop: 4 }}>Leerlingen uit deze klassen worden bij eerste login automatisch aan deze periode gekoppeld.</div>
               </div>
               <button onClick={maakPeriode} disabled={!nieuwePeriode.name || !nieuwePeriode.start_date || !nieuwePeriode.end_date || periodeBezig} style={{ padding: '10px 22px', background: (!nieuwePeriode.name || !nieuwePeriode.start_date || !nieuwePeriode.end_date) ? '#E4DDD4' : '#F26B1D', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                 {periodeBezig ? '⏳ Bezig...' : '+ Periode aanmaken'}

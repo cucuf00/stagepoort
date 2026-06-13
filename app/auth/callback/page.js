@@ -27,10 +27,16 @@ function AuthCallbackInner() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, klas')
           .eq('user_id', session.user.id)
           .limit(1)
           .maybeSingle()
+
+        // Student zonder klas → onboarding
+        if (profile?.role === 'student' && !profile.klas) {
+          router.replace('/onboarding')
+          return
+        }
 
         const roleRoutes = {
           coordinator: '/dashboard/coordinator',
