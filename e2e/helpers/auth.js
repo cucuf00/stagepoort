@@ -12,6 +12,10 @@ function getAdminClient() {
   )
 }
 
+/**
+ * Login via hashed_token direct in onze auth callback.
+ * Dit omzeilt het PKCE probleem waarbij de code_verifier ontbreekt in de browser.
+ */
 async function loginAs(page, email) {
   const supabase = getAdminClient()
   const baseURL = process.env.BASE_URL || 'https://stagepoort.vercel.app'
@@ -19,12 +23,20 @@ async function loginAs(page, email) {
   const { data, error } = await supabase.auth.admin.generateLink({
     type: 'magiclink',
     email,
-    options: { redirectTo: `${baseURL}/auth/callback` },
+    // Geen redirectTo — we gaan direct naar de callback
   })
 
   if (error) throw new Error(`Magic link genereren mislukt voor ${email}: ${error.message}`)
 
-  await page.goto(data.properties.action_link, { waitUntil: 'load' })
+  // Ga direct naar onze callback met de hashed_token
+  // Dit roept verifyOtp aan zonder PKCE flow
+  const hashedToken = data.properties.hashed_token
+  await page.goto(
+    `${baseURL}/auth/callback?token_hash=${hashedToken}&type=email`,
+    { waitUntil: 'domcontentloaded' }
+  )
+
+  // Wacht tot we op het dashboard of onboarding zijn
   await page.waitForURL(/(dashboard|onboarding)/, { timeout: 20_000 })
 }
 
