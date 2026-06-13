@@ -9,6 +9,12 @@ function getInitialen(naam) {
   return naam.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 }
 
+function getGoedgekeurdeUren(placement) {
+  const rij = placement?.approved_hours_per_placement?.[0]
+  if (!rij) return 0
+  return Number(rij.total_approved_hours) || 0
+}
+
 function StatusBadge({ status }) {
   const map = {
     'actief':      { label: 'Op koers',       bg: '#E2F4EC', color: '#1A7F52' },
@@ -66,7 +72,7 @@ export default function CoordinatorDashboard() {
 
       const [{ data: s }, { data: p }, { data: pers }, { count: actief }, { count: uren }] = await Promise.all([
         supabase.from('profiles').select('*').eq('school_id', prof.school_id).eq('role', 'student').order('name'),
-        supabase.from('placements').select('*').eq('school_id', prof.school_id).order('created_at', { ascending: false }),
+        supabase.from('placements').select('*, approved_hours_per_placement(total_approved_hours)').eq('school_id', prof.school_id).order('created_at', { ascending: false }),
         supabase.from('stage_periods').select('*').eq('school_id', prof.school_id).order('start_date'),
         supabase.from('placements').select('*', { count: 'exact', head: true }).eq('school_id', prof.school_id).eq('status', 'active'),
         supabase.from('hours').select('*', { count: 'exact', head: true }).eq('school_id', prof.school_id).eq('status', 'pending'),
@@ -396,7 +402,23 @@ export default function CoordinatorDashboard() {
                       ? <div><div style={{ fontWeight: 600 }}>{pl.company_name}</div><div style={{ fontSize: 12, color: '#5C6B7A' }}>{pl.supervisor_name || '—'}</div></div>
                       : <span style={{ color: '#5C6B7A' }}>—</span>}
                   </div>
-                  <div style={{ fontSize: 13, color: '#5C6B7A' }}>0 / {pl?.hours_required || 320} u</div>
+                  <div style={{ fontSize: 13, color: '#5C6B7A' }}>
+                    {(() => {
+                      const goedgekeurd = getGoedgekeurdeUren(pl)
+                      const vereist = pl?.hours_required || 320
+                      const pct = Math.min(100, Math.round((goedgekeurd / vereist) * 100))
+                      const kleur = pct >= 100 ? '#1A7F52' : pct >= 60 ? '#F26B1D' : '#9AA8B2'
+                      return (
+                        <div>
+                          <span style={{ fontWeight: 600, color: kleur }}>{goedgekeurd}</span>
+                          <span style={{ color: '#9AA8B2' }}> / {vereist} u</span>
+                          <div style={{ marginTop: 3, height: 3, borderRadius: 99, background: '#E4DDD4', width: 80 }}>
+                            <div style={{ height: '100%', borderRadius: 99, background: kleur, width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
                   <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
                     <button onClick={() => openEdit(student)} title="Bewerken"
                       style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #E4DDD4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>✏️</button>

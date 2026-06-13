@@ -468,10 +468,14 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
     }).select().single()
 
     if (!error) {
-      // XP toekennen in database
+      // XP toekennen
       const nieuweXP = (profile.xp || 0) + 100
-      const nieuweStreak = (profile.streak || 0) + 1
       const nieuweLevel = Math.floor(nieuweXP / 300) + 1
+
+      // Streak correct berekenen via database functie (controleert aaneengesloten weken)
+      const { data: streakData } = await supabase
+        .rpc('bereken_streak', { p_student_id: profile.id, p_week_number: weekNr, p_year: jaar })
+      const nieuweStreak = streakData ?? 1
 
       await supabase.from('profiles').update({
         xp: nieuweXP,
