@@ -1,6 +1,6 @@
 version: 2
+
 updates:
-  # npm packages (Next.js, Supabase, Resend, Playwright, etc.)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -9,22 +9,18 @@ updates:
       time: "09:00"
       timezone: "Europe/Amsterdam"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
     groups:
-      supabase:
-        patterns:
-          - "@supabase/*"
-      nextjs:
-        patterns:
-          - "next"
-          - "react"
-          - "react-dom"
-      playwright:
-        patterns:
-          - "@playwright/*"
+      production-dependencies:
+        dependency-type: "production"
+      dev-dependencies:
+        dependency-type: "development"
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+    labels:
+      - "dependabot"
+      - "dependencies"
 
-  # GitHub Actions versies
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -33,5 +29,5 @@ updates:
       time: "09:00"
       timezone: "Europe/Amsterdam"
     labels:
-      - "dependencies"
+      - "dependabot"
       - "github-actions"
