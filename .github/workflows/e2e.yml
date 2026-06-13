@@ -1,0 +1,45 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Handmatig starten via GitHub UI
+
+jobs:
+  e2e:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        env:
+          BASE_URL: https://stagepoort.vercel.app
+          SUPABASE_URL: https://vnarhxsxbbmbowtvzfaj.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TEST_COORDINATOR_EMAIL: ${{ secrets.TEST_COORDINATOR_EMAIL }}
+          TEST_STUDENT_EMAIL: zm@live.nl
+        run: npx playwright test
+
+      - name: Upload testrapport
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-rapport-${{ github.run_number }}
+          path: playwright-report/
+          retention-days: 14
