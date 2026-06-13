@@ -37,12 +37,13 @@ test.describe('Student dashboard', () => {
       return
     }
 
-    // Klik op Uren tab
-    await page.locator('text=Uren').first().click()
-    await page.waitForTimeout(1000)
+    // Klik op Uren tab in bottom nav
+    await page.locator('button').filter({ hasText: '⏱' }).first().click()
 
-    // Formulier moet zichtbaar zijn
-    await expect(page.locator('input[type="date"], input[type="number"]').first()).toBeVisible({ timeout: 5_000 })
+    // Wacht op het formulier — het zijn client-side gerenderde inputs
+    await expect(
+      page.locator('input[type="date"], input[type="number"]').first()
+    ).toBeVisible({ timeout: 10_000 })
   })
 
   test('weekstory tab laadt', async ({ page }) => {

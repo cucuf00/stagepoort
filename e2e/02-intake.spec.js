@@ -43,7 +43,8 @@ test.describe('Intake formulier (anoniem)', () => {
   test('ongeldige token toont foutmelding', async ({ page }) => {
     await page.goto('/intake/00000000-0000-0000-0000-000000000000')
     await page.waitForTimeout(4000)
-    const heeftFout = await page.locator('text=/niet beschikbaar|niet geldig|niet gevonden|niet meer|ongeldig|verlopen/i').isVisible()
+    // Gebruik .first() om strict mode violation te vermijden (meerdere elementen kunnen matchen)
+    const heeftFout = await page.locator('text=/niet beschikbaar|niet geldig|niet gevonden|niet meer|ongeldig|verlopen/i').first().isVisible()
     const isGeredirect = !page.url().includes('/intake/')
     expect(heeftFout || isGeredirect).toBeTruthy()
   })
