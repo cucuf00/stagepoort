@@ -75,10 +75,25 @@ async function upsertProfile(sb, userId, email, role, extra = {}) {
   console.log(`  ✅ Profiel aangemaakt: ${email} (${role})`)
 }
 
-async function upsertTestPlacement(sb, studentId) {
+async function upsertTestPlacement(sb, studAuthUserId) {
+  // Haal het PROFIEL ID op — placements.student_id verwijst naar profiles.id
+  // NIET naar auth.users.id (studAuthUserId)
+  const { data: profiel, error: profielErr } = await sb.from('profiles')
+    .select('id')
+    .eq('user_id', studAuthUserId)
+    .eq('school_id', TEST_SCHOOL_ID)
+    .maybeSingle()
+
+  if (profielErr || !profiel) {
+    throw new Error(`Student profiel niet gevonden in testschool (user_id: ${studAuthUserId}): ${profielErr?.message}`)
+  }
+
+  const studProfileId = profiel.id
+  console.log(`  📋 Student profile ID: ${studProfileId}`)
+
   const { data: existing } = await sb.from('placements')
     .select('id')
-    .eq('student_id', studentId)
+    .eq('student_id', studProfileId)
     .eq('school_id', TEST_SCHOOL_ID)
     .eq('status', 'active')
     .maybeSingle()
@@ -91,7 +106,7 @@ async function upsertTestPlacement(sb, studentId) {
 
   const { data, error } = await sb.from('placements').insert({
     school_id: TEST_SCHOOL_ID,
-    student_id: studentId,
+    student_id: studProfileId,  // ✅ profiles.id, niet auth user id
     period_id: TEST_PERIOD_ID,
     status: 'active',
     first_name: 'Playwright',
@@ -120,6 +135,10 @@ module.exports = async function globalSetup() {
 
   if (!coordEmail || !studEmail) {
     throw new Error('TEST_COORDINATOR_EMAIL of TEST_STUDENT_EMAIL ontbreekt in env vars')
+  }
+
+  if (coordEmail === studEmail) {
+    throw new Error(`❌ TEST_COORDINATOR_EMAIL en TEST_STUDENT_EMAIL zijn hetzelfde (${coordEmail}). Ze moeten verschillend zijn!`)
   }
 
   console.log('\n🔧 Playwright globalSetup — testschool klaarzetten...')
