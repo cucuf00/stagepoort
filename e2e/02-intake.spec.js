@@ -57,6 +57,8 @@ test.describe('Intake formulier (anoniem)', () => {
     await v1.click()
     await page.waitForTimeout(500)
     await page.locator('input[placeholder="R. Jansen"]').fill('Dhr. E2E Begeleider')
+    // Groene stage is verplicht — klik op Nee
+    await page.locator('button').filter({ hasText: '❌ Nee' }).click()
     const v2 = page.locator('button').filter({ hasText: /volgende/i }).first()
     await expect(v2).toBeEnabled({ timeout: 5000 })
     await v2.click()
