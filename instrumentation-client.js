@@ -1,5 +1,4 @@
-// Next.js 15+ laadt dit bestand automatisch aan de client-kant
-// Oplossing voor Turbopack die withSentryConfig's automatische injectie niet ondersteunt
+// Next.js 15+ laadt dit bestand automatisch in de browser (Turbopack compatibel)
 import * as Sentry from '@sentry/nextjs'
 
 Sentry.init({
@@ -10,3 +9,6 @@ Sentry.init({
   replaysOnErrorSampleRate: 1.0,
   replaysSessionSampleRate: 0,
 })
+
+// Vereist door @sentry/nextjs voor navigatie-tracking
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
