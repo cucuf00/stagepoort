@@ -376,7 +376,7 @@ export default function BegeleiderDashboard() {
       setEvalResponses(er ?? [])
       setLoading(false)
     }
-    load()
+    if (placementId) load()
   }, [placementId])
 
   const pendingCount = uren.filter(u => u.status === 'pending').length
