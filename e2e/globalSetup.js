@@ -40,22 +40,25 @@ async function upsertAuthUser(sb, email) {
 }
 
 async function upsertProfile(sb, userId, email, role, extra = {}) {
-  // Verwijder bestaand profiel in testschool als user_id anders is (veiligheidscheck)
   const { data: existing } = await sb.from('profiles')
-    .select('id, user_id')
+    .select('id, user_id, role, klas')
     .eq('email', email)
     .eq('school_id', TEST_SCHOOL_ID)
     .maybeSingle()
 
-  if (existing && existing.user_id !== userId) {
-    // Profiel bestaat maar met ander user_id — update het
-    await sb.from('profiles').update({ user_id: userId }).eq('id', existing.id)
-    console.log(`  🔄 Profiel user_id bijgewerkt voor ${email}`)
-    return
-  }
-
   if (existing) {
-    console.log(`  ↩️  Profiel bestaat al voor ${email}`)
+    // Altijd updaten: user_id, role en klas kunnen verkeerd staan door eerdere runs
+    const updates = {}
+    if (existing.user_id !== userId)     updates.user_id = userId
+    if (existing.role !== role)          updates.role = role
+    if (existing.klas !== (extra.klas || null)) updates.klas = extra.klas || null
+
+    if (Object.keys(updates).length > 0) {
+      await sb.from('profiles').update(updates).eq('id', existing.id)
+      console.log(`  🔄 Profiel bijgewerkt voor ${email}:`, updates)
+    } else {
+      console.log(`  ↩️  Profiel correct voor ${email}`)
+    }
     return
   }
 
@@ -70,7 +73,6 @@ async function upsertProfile(sb, userId, email, role, extra = {}) {
     level: 1,
     streak: 0,
   })
-
   if (error) throw new Error(`Profiel insert mislukt voor ${email}: ${error.message}`)
   console.log(`  ✅ Profiel aangemaakt: ${email} (${role})`)
 }
