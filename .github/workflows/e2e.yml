@@ -28,12 +28,14 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Run E2E tests
+      
         env:
           BASE_URL: https://stagepoort.vercel.app
           SUPABASE_URL: https://vnarhxsxbbmbowtvzfaj.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TEST_COORDINATOR_EMAIL: ${{ secrets.TEST_COORDINATOR_EMAIL }}
           TEST_STUDENT_EMAIL: ${{ secrets.TEST_STUDENT_EMAIL }}
+          TEST_COACH_EMAIL: ${{ secrets.TEST_COACH_EMAIL }}
 
         run: npx playwright test
 
