@@ -14,3 +14,4 @@ Sentry.init({
   // Geen debug output in productie
   debug: false,
 })
+# Sentry deployment trigger
