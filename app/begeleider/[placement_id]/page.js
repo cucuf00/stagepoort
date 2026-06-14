@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 // Anonieme client — begeleider is niet ingelogd, werkt via UUID-token in URL
@@ -336,7 +337,8 @@ function InfoTab({ placement, uren }) {
 }
 
 // ─── Hoofdpagina ──────────────────────────────────────────────────────────────
-export default function BegeleiderDashboard({ params }) {
+export default function BegeleiderDashboard() {
+  const params = useParams()
   const placementId = params.placement_id
   const [placement, setPlacement] = useState(null)
   const [uren, setUren] = useState([])
