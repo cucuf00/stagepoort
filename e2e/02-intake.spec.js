@@ -50,6 +50,8 @@ test.describe('Intake formulier (anoniem)', () => {
     await page.locator('input[placeholder="Schiekade 34"]').fill('Teststraat 1')
     await page.locator('input[placeholder="3013 BB"]').fill('1234 AB')
     await page.locator('input[placeholder="Rotterdam"]').fill('Rotterdam')
+    await page.locator('input[placeholder="010 123 45 67"]').fill('0101234567')
+    await page.locator('input[placeholder="info@techwerk.nl"]').fill('test@e2e-testbedrijf.nl')
     const v1 = page.locator('button').filter({ hasText: /volgende/i }).first()
     await expect(v1).toBeEnabled({ timeout: 5000 })
     await v1.click()
