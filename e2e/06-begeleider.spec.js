@@ -78,8 +78,9 @@ test.describe('Stagebegeleider dashboard', () => {
     await page.locator('button').filter({ hasText: '📋' }).first().click()
     await page.waitForTimeout(1000)
 
+    // Toont evaluatiemomenten OF lege staat melding
     const heeftMomenten = await page.locator(
-      'text=/Tussenevaluatie|Eindevaluatie|Nog niet ingevuld/i'
+      'text=/Tussenevaluatie|Eindevaluatie|Nog niet ingevuld|geconfigureerd door de coördinator/i'
     ).first().isVisible()
     expect(heeftMomenten).toBeTruthy()
   })
