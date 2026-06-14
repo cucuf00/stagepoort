@@ -135,18 +135,21 @@ module.exports = async function globalSetup() {
   const coordEmail = process.env.TEST_COORDINATOR_EMAIL
   const studEmail  = process.env.TEST_STUDENT_EMAIL
 
-  if (!coordEmail || !studEmail) {
-    throw new Error('TEST_COORDINATOR_EMAIL of TEST_STUDENT_EMAIL ontbreekt in env vars')
+  const coachEmail  = process.env.TEST_COACH_EMAIL
+
+  if (!coordEmail || !studEmail || !coachEmail) {
+    throw new Error('TEST_COORDINATOR_EMAIL, TEST_STUDENT_EMAIL of TEST_COACH_EMAIL ontbreekt in env vars')
   }
 
-  if (coordEmail === studEmail) {
-    throw new Error(`❌ TEST_COORDINATOR_EMAIL en TEST_STUDENT_EMAIL zijn hetzelfde (${coordEmail}). Ze moeten verschillend zijn!`)
+  if (new Set([coordEmail, studEmail, coachEmail]).size !== 3) {
+    throw new Error('❌ TEST_COORDINATOR_EMAIL, TEST_STUDENT_EMAIL en TEST_COACH_EMAIL moeten allemaal verschillend zijn!')
   }
 
   console.log('\n🔧 Playwright globalSetup — testschool klaarzetten...')
   console.log(`   School ID:   ${TEST_SCHOOL_ID}`)
   console.log(`   Coordinator: ${coordEmail}`)
-  console.log(`   Student:     ${studEmail}\n`)
+  console.log(`   Student:     ${studEmail}`)
+  console.log(`   Coach:       ${process.env.TEST_COACH_EMAIL}\n`)
 
   const sb = getAdmin()
 
@@ -160,6 +163,27 @@ module.exports = async function globalSetup() {
   const studId = await upsertAuthUser(sb, studEmail)
   await upsertProfile(sb, studId, studEmail, 'student', { name: 'Playwright Student', klas: 'TEST-A' })
   await upsertTestPlacement(sb, studId)
+
+  // Coach — koppel aan de testplacement van de student
+  console.log('📋 Coach:')
+  const coachId = await upsertAuthUser(sb, coachEmail)
+  await upsertProfile(sb, coachId, coachEmail, 'coach', { name: 'Playwright Coach' })
+
+  // Haal coach profile ID op en koppel aan testplacement
+  const { data: coachProfiel } = await sb.from('profiles')
+    .select('id')
+    .eq('user_id', coachId)
+    .eq('school_id', TEST_SCHOOL_ID)
+    .maybeSingle()
+
+  if (coachProfiel && process.env.TEST_PLACEMENT_ID) {
+    await sb.from('placements').update({
+      coach_id:    coachProfiel.id,
+      coach_name:  'Playwright Coach',
+      coach_email: coachEmail,
+    }).eq('id', process.env.TEST_PLACEMENT_ID)
+    console.log(`  ✅ Coach gekoppeld aan testplacement`)
+  }
 
   console.log('\n🚀 Testschool klaar — tests starten...\n')
 }
