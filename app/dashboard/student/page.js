@@ -4,12 +4,12 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const DARK = {
-  bg: '#0B0F14',
-  card: '#141922',
-  card2: '#1A2130',
+  bg: '#0D1420',
+  card: '#172032',
+  card2: '#1D2840',
   border: 'rgba(255,255,255,.07)',
   text: '#F0F4F8',
-  sub: '#7A8A9A',
+  sub: '#9AACBE',
   orange: '#F26B1D',
   green: '#4ADE80',
   blue: '#60A5FA',
@@ -39,7 +39,7 @@ function XPBalk({ xp, level }) {
         <span>Level {level}</span>
         <span>{xpPerLevel - huidigeXP} XP tot level {level + 1}</span>
       </div>
-      <div style={{ height: 6, background: 'rgba(255,255,255,.1)', borderRadius: 99, overflow: 'hidden' }}>
+      <div style={{ height: 6, background: 'rgba(255,255,255,.15)', borderRadius: 99, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${DARK.orange}, #FF9A3C)`, borderRadius: 99, transition: 'width .5s ease' }} />
       </div>
     </div>
@@ -128,12 +128,12 @@ function MijnStageTab({ profile, placement, badges, studentBadges, klassement, k
             return (
               <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < 3 ? 1 : 'none' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: actief ? DARK.green : 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: actief ? '#0B0F14' : DARK.sub, flexShrink: 0 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: actief ? DARK.green : 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: actief ? '#0B0F14' : DARK.sub, flexShrink: 0 }}>
                     {actief ? '✓' : i + 1}
                   </div>
                   <div style={{ fontSize: 10, color: actief ? DARK.green : DARK.sub, textAlign: 'center', maxWidth: 60 }}>{stap}</div>
                 </div>
-                {i < 3 && <div style={{ flex: 1, height: 2, background: actief ? DARK.green : 'rgba(255,255,255,.1)', margin: '0 4px', marginBottom: 20 }} />}
+                {i < 3 && <div style={{ flex: 1, height: 2, background: actief ? DARK.green : 'rgba(255,255,255,.15)', margin: '0 4px', marginBottom: 20 }} />}
               </div>
             )
           })}
@@ -216,7 +216,7 @@ function MijnStageTab({ profile, placement, badges, studentBadges, klassement, k
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{u.description?.slice(0, 40)}{u.description?.length > 40 ? '...' : ''}</div>
                 <div style={{ fontSize: 11, color: DARK.sub }}>{new Date(u.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} · {u.hours}u</div>
               </div>
-              <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: u.status === 'approved' ? 'rgba(74,222,128,.15)' : u.status === 'rejected' ? 'rgba(239,68,68,.15)' : 'rgba(251,191,36,.15)', color: u.status === 'approved' ? DARK.green : u.status === 'rejected' ? '#EF4444' : '#FBBf24' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: u.status === 'approved' ? 'rgba(74,222,128,.25)' : u.status === 'rejected' ? 'rgba(239,68,68,.25)' : 'rgba(251,191,36,.25)', color: u.status === 'approved' ? DARK.green : u.status === 'rejected' ? '#EF4444' : '#FBBf24' }}>
                 {u.status === 'approved' ? 'Goedgekeurd' : u.status === 'rejected' ? 'Afgekeurd' : 'Wacht'}
               </div>
             </div>
@@ -312,7 +312,7 @@ function UrenTab({ profile, placement, uren, setUren }) {
                     <div style={{ fontSize: 11, color: '#EF4444', marginTop: 4 }}>↳ {u.rejection_reason}</div>
                   )}
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0, background: u.status === 'approved' ? 'rgba(74,222,128,.15)' : u.status === 'rejected' ? 'rgba(239,68,68,.15)' : 'rgba(251,191,36,.15)', color: u.status === 'approved' ? DARK.green : u.status === 'rejected' ? '#EF4444' : '#FBBF24' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0, background: u.status === 'approved' ? 'rgba(74,222,128,.25)' : u.status === 'rejected' ? 'rgba(239,68,68,.25)' : 'rgba(251,191,36,.25)', color: u.status === 'approved' ? DARK.green : u.status === 'rejected' ? '#EF4444' : '#FBBF24' }}>
                   {u.status === 'approved' ? 'Goedgekeurd' : u.status === 'rejected' ? 'Afgekeurd' : 'Wacht op goedkeuring'}
                 </div>
               </div>
@@ -323,7 +323,7 @@ function UrenTab({ profile, placement, uren, setUren }) {
 
       {uren.length === 0 && (
         <div style={{ textAlign: 'center', padding: 40, color: DARK.sub }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⏱</div>
+          <div style={{ fontSize: 40, marginBottom: 12, width: 72, height: 72, borderRadius: '50%', background: 'rgba(242,107,29,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>⏱</div>
           <div style={{ fontSize: 14 }}>Nog geen uren ingediend</div>
         </div>
       )}
@@ -387,8 +387,8 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                {status === 'graded' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(74,222,128,.15)', color: DARK.green }}>Beoordeeld</span>}
-                {status === 'submitted' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(251,191,36,.15)', color: '#FBBF24' }}>Ingeleverd</span>}
+                {status === 'graded' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(74,222,128,.25)', color: DARK.green }}>Beoordeeld</span>}
+                {status === 'submitted' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(251,191,36,.25)', color: '#FBBF24' }}>Ingeleverd</span>}
                 {status === 'open' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.07)', color: DARK.sub }}>Open</span>}
               </div>
             </div>
@@ -535,7 +535,7 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
         {/* Voortgang */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
           {VRAGEN.map((_, i) => (
-            <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i <= stap ? DARK.orange : 'rgba(255,255,255,.1)' }} />
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i <= stap ? DARK.orange : 'rgba(255,255,255,.15)' }} />
           ))}
         </div>
 
@@ -671,7 +671,7 @@ export default function StudentDashboard() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: DARK.bg }}>
-      <div style={{ width: 40, height: 40, border: '3px solid rgba(255,255,255,.1)', borderTop: `3px solid ${DARK.orange}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <div style={{ width: 40, height: 40, border: '3px solid rgba(255,255,255,.15)', borderTop: `3px solid ${DARK.orange}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
