@@ -18,6 +18,8 @@ async function loginAs(page, email) {
   const { data, error } = await supabase.auth.admin.generateLink({ type: 'magiclink', email })
   if (error) throw new Error(`Magic link genereren mislukt voor ${email}: ${error.message}`)
   await page.goto(`${baseURL}/auth/callback?token_hash=${data.properties.hashed_token}&type=email`, { waitUntil: 'domcontentloaded' })
+  // Klik op de bevestigingsknop (beschermt tegen Microsoft SafeLinks)
+  await page.locator('button').filter({ hasText: /inloggen bevestigen/i }).click({ timeout: 10_000 })
   await page.waitForURL(/(dashboard|onboarding)/, { timeout: 20_000 })
 }
 
