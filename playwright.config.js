@@ -2,9 +2,10 @@ const { defineConfig, devices } = require('@playwright/test')
 
 module.exports = defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/globalSetup.js',  // Maakt testschool-gebruikers aan vóór alle tests
   timeout: 30_000,
-  retries: 0, // Geen retries — magic links zijn eenmalig
-  workers: 1, // Sequentieel om race conditions te voorkomen
+  retries: 0,
+  workers: 1,
   use: {
     baseURL: process.env.BASE_URL || 'https://stagepoort.vercel.app',
     screenshot: 'only-on-failure',
