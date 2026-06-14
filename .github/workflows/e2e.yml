@@ -33,7 +33,8 @@ jobs:
           SUPABASE_URL: https://vnarhxsxbbmbowtvzfaj.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TEST_COORDINATOR_EMAIL: ${{ secrets.TEST_COORDINATOR_EMAIL }}
-          TEST_STUDENT_EMAIL: zm@live.nl
+          TEST_STUDENT_EMAIL: ${{ secrets.TEST_STUDENT_EMAIL }}
+
         run: npx playwright test
 
       - name: Upload testrapport
