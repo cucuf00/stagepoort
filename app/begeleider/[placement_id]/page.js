@@ -315,6 +315,33 @@ function InfoTab({ placement, uren }) {
         </div>
       </div>
 
+      {/* Stagecoach */}
+      <div style={card}>
+        <div style={{ ...lbl, marginBottom: 10 }}>🧭 Stagecoach</div>
+        {placement.coach_name ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: '50%',
+              background: '#EBF4FF', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: 18, flexShrink: 0,
+            }}>🧑‍🏫</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{placement.coach_name}</div>
+              {placement.coach_email && (
+                <a
+                  href={`mailto:${placement.coach_email}`}
+                  style={{ fontSize: 13, color: C.orange, textDecoration: 'none', marginTop: 2, display: 'block' }}
+                >
+                  ✉️ {placement.coach_email}
+                </a>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: C.sub }}>Nog geen stagecoach gekoppeld</div>
+        )}
+      </div>
+
       {/* Stage details */}
       <div style={card}>
         <div style={{ ...lbl, marginBottom: 10 }}>📅 Stage details</div>
