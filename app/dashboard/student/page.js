@@ -426,29 +426,99 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
 
 
 // ============================================================
-// DAGSTORY TAB
 // ============================================================
+// DAGSTORY TAB — Instagram/TikTok stijl
+// ============================================================
+function StoriesArchief({ stories, fmtDag }) {
+  if (!stories || stories.length === 0) return null
+  const moodKleur = { '😊': '#34D399', '😐': '#FBBF24', '😕': '#F87171' }
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: DARK.sub, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
+        Eerdere dagen
+      </div>
+      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+        {stories.slice(0, 10).map(s => (
+          <div key={s.id} style={{ flexShrink: 0, textAlign: 'center', width: 60 }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%',
+              background: `${moodKleur[s.mood] || '#7A8A9A'}20`,
+              border: `2.5px solid ${moodKleur[s.mood] || '#7A8A9A'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 26, margin: '0 auto 6px',
+            }}>
+              {s.mood || '📝'}
+            </div>
+            <div style={{ fontSize: 10, color: DARK.sub, lineHeight: 1.3 }}>{fmtDag(s.date)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
   const [stap, setStap] = useState(0)
   const [antwoorden, setAntwoorden] = useState({ mood: '', a1: '', a2: '' })
   const [bezig, setBezig] = useState(false)
-  const [xpPop, setXpPop] = useState(false)
   const [klaar, setKlaar] = useState(false)
+  const [animKey, setAnimKey] = useState(0)
 
   const vandaag = new Date().toISOString().split('T')[0]
   const heeftVandaag = stories.some(s => s.date === vandaag)
 
-  const MOODS = ['😊', '😐', '😕']
-  const VRAGEN = [
-    { type: 'tekst',  vraag: 'Wat heb ik vandaag gedaan?',            emoji: '📝', key: 'a1', placeholder: 'Beschrijf kort je werkzaamheden van vandaag...' },
-    { type: 'mood',   vraag: 'Hoe voelde ik me vandaag op stage?',    emoji: '💭', key: 'mood' },
-    { type: 'tekst',  vraag: 'Wat heb ik van vandaag geleerd?',       emoji: '💡', key: 'a2', placeholder: 'Iets nieuws wat je hebt ontdekt of geleerd...' },
+  const MOODS = [
+    { emoji: '😊', label: 'Goed!',   kleur: '#34D399' },
+    { emoji: '😐', label: 'Oké',     kleur: '#FBBF24' },
+    { emoji: '😕', label: 'Lastig',  kleur: '#F87171' },
   ]
 
+  const STAPPEN = [
+    {
+      emoji: '📝',
+      vraag: 'Wat heb ik vandaag gedaan?',
+      type: 'tekst', key: 'a1',
+      placeholder: 'Vertel kort wat je vandaag hebt gedaan...',
+      gradient: 'linear-gradient(160deg, #1a0533 0%, #2d1b69 45%, #0D1420 100%)',
+      accent: '#A78BFA',
+    },
+    {
+      emoji: '💭',
+      vraag: 'Hoe voelde ik me vandaag?',
+      type: 'mood', key: 'mood',
+      gradient: 'linear-gradient(160deg, #33001a 0%, #6b1d4f 45%, #0D1420 100%)',
+      accent: '#F472B6',
+    },
+    {
+      emoji: '💡',
+      vraag: 'Wat heb ik vandaag geleerd?',
+      type: 'tekst', key: 'a2',
+      placeholder: 'Wat heb je ontdekt of geleerd vandaag?',
+      gradient: 'linear-gradient(160deg, #001a12 0%, #064e3b 45%, #0D1420 100%)',
+      accent: '#34D399',
+    },
+  ]
+
+  const huidig = STAPPEN[stap]
+
   const stapGeldig = () => {
-    const vraag = VRAGEN[stap]
-    if (vraag.type === 'mood') return antwoorden.mood !== ''
-    return antwoorden[vraag.key]?.trim().length > 0
+    if (huidig.type === 'mood') return antwoorden.mood !== ''
+    return antwoorden[huidig.key]?.trim().length > 0
+  }
+
+  const gaVerder = () => {
+    if (!stapGeldig() || bezig) return
+    if (stap < STAPPEN.length - 1) {
+      setAnimKey(k => k + 1)
+      setStap(s => s + 1)
+    } else {
+      verzend()
+    }
+  }
+
+  const gaTerug = () => {
+    setAnimKey(k => k + 1)
+    setStap(s => s - 1)
   }
 
   async function verzend() {
@@ -469,17 +539,10 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
       const nieuweXP = (profile.xp || 0) + 50
       const nieuweLevel = Math.floor(nieuweXP / 300) + 1
       const nieuweStreak = (profile.streak || 0) + 1
-
-      await supabase.from('profiles').update({
-        xp: nieuweXP,
-        level: nieuweLevel,
-        streak: nieuweStreak,
-      }).eq('id', profile.id)
-
+      await supabase.from('profiles').update({ xp: nieuweXP, level: nieuweLevel, streak: nieuweStreak }).eq('id', profile.id)
       setProfile(prev => ({ ...prev, xp: nieuweXP, level: nieuweLevel, streak: nieuweStreak }))
       setStories(prev => [data, ...prev])
-      setXpPop(true)
-      setTimeout(() => { setXpPop(false); setKlaar(true) }, 1500)
+      setKlaar(true)
     }
     setBezig(false)
   }
@@ -489,115 +552,152 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
     return new Date(d + 'T12:00:00').toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })
   }
 
-  if (heeftVandaag || klaar) return (
+  if (klaar) return (
     <div>
-      {klaar && (
-        <div style={{ ...S.card, textAlign: 'center', padding: 40, background: 'linear-gradient(135deg, rgba(74,222,128,.1), rgba(242,107,29,.1))' }}>
-          <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
-          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 22, fontWeight: 800, marginBottom: 8 }}>+50 XP!</div>
-          <div style={{ fontSize: 14, color: DARK.sub }}>Dagboek ingevuld · ga zo door 🔥</div>
-        </div>
-      )}
-      {!klaar && (
-        <div style={{ ...S.card, textAlign: 'center', padding: 32 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Dagboek al ingevuld vandaag</div>
-          <div style={{ fontSize: 13, color: DARK.sub }}>Kom morgen terug!</div>
-        </div>
-      )}
-      <div style={S.card}>
-        <div style={S.label}>Eerdere dagen</div>
-        {stories.slice(0, 5).map(s => (
-          <div key={s.id} style={{ borderBottom: `1px solid ${DARK.border}`, paddingBottom: 12, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: DARK.sub }}>{fmtDag(s.date)}</span>
-              <span style={{ fontSize: 20 }}>{s.mood}</span>
-            </div>
-            {s.answer_1 && <div style={{ fontSize: 13, color: DARK.text, lineHeight: 1.5, marginBottom: 4 }}>📝 {s.answer_1}</div>}
-            {s.answer_2 && <div style={{ fontSize: 13, color: DARK.sub, lineHeight: 1.5 }}>💡 {s.answer_2}</div>}
-          </div>
-        ))}
-        {stories.length === 0 && <div style={{ color: DARK.sub, fontSize: 13 }}>Nog geen dagboek entries</div>}
+      <style>{`@keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}`}</style>
+      <div style={{ borderRadius: 24, background: 'linear-gradient(160deg, #064e3b, #1a1040)', padding: '40px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 72, marginBottom: 16, display: 'inline-block', animation: 'pop .5s ease' }}>🎉</div>
+        <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 30, fontWeight: 900, color: '#fff', marginBottom: 8 }}>+50 XP!</div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,.55)' }}>Dagboek ingevuld · ga zo door 🔥</div>
       </div>
+      <StoriesArchief stories={stories} fmtDag={fmtDag} />
     </div>
   )
 
-  const huidigeVraag = VRAGEN[stap]
+  if (heeftVandaag) return (
+    <div>
+      <div style={{ borderRadius: 24, background: 'linear-gradient(160deg, #1a0533, #2d1b69)', padding: '32px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+        <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, fontWeight: 900, color: '#fff', marginBottom: 6 }}>Al ingevuld vandaag</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,.5)' }}>Kom morgen terug!</div>
+      </div>
+      <StoriesArchief stories={stories} fmtDag={fmtDag} />
+    </div>
+  )
 
   return (
     <div>
-      {xpPop && (
-        <div style={{ position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', fontFamily: 'Sora,sans-serif', fontSize: '2.5rem', fontWeight: 800, color: DARK.green, zIndex: 300, textShadow: '0 4px 20px rgba(74,222,128,.5)', animation: 'fadeUp 1.5s ease forwards', pointerEvents: 'none' }}>
-          +50 XP ⚡
-        </div>
-      )}
-      <style>{`@keyframes fadeUp{0%{opacity:0;transform:translate(-50%,-30%)}25%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}`}</style>
+      <style>{`
+        @keyframes slideIn{from{opacity:0;transform:translateX(32px) scale(.97)}to{opacity:1;transform:translateX(0) scale(1)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .dag-placeholder::placeholder{color:rgba(255,255,255,.35)}
+      `}</style>
 
-      <div style={{ ...S.card, minHeight: 320, display: 'flex', flexDirection: 'column' }}>
-        {/* Voortgang */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-          {VRAGEN.map((_, i) => (
-            <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i <= stap ? DARK.orange : 'rgba(255,255,255,.15)' }} />
+      <div key={animKey} style={{
+        borderRadius: 24,
+        background: huidig.gradient,
+        padding: '20px 20px 26px',
+        minHeight: 440,
+        display: 'flex',
+        flexDirection: 'column',
+        animation: 'slideIn .28s ease',
+      }}>
+        {/* Progress bars — Instagram stijl */}
+        <div style={{ display: 'flex', gap: 5, marginBottom: 22 }}>
+          {STAPPEN.map((s, i) => (
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: 'rgba(255,255,255,.15)' }}>
+              <div style={{
+                height: '100%', borderRadius: 99,
+                background: s.accent,
+                width: i < stap ? '100%' : i === stap ? '50%' : '0%',
+                transition: 'width .5s ease',
+              }} />
+            </div>
           ))}
         </div>
 
-        <div style={{ textAlign: 'center', marginBottom: 24, flex: 1 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>{huidigeVraag.emoji}</div>
-          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 17, fontWeight: 700, marginBottom: 20, lineHeight: 1.4 }}>
-            {huidigeVraag.vraag}
-          </div>
+        {/* Emoji */}
+        <div style={{ textAlign: 'center', marginBottom: 14, animation: 'fadeUp .3s ease' }}>
+          <span style={{ fontSize: 54, filter: 'drop-shadow(0 4px 16px rgba(0,0,0,.5))' }}>{huidig.emoji}</span>
+        </div>
 
-          {huidigeVraag.type === 'mood' ? (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
+        {/* Vraag */}
+        <div style={{
+          fontFamily: 'Sora,sans-serif', fontSize: 22, fontWeight: 900,
+          color: '#fff', textAlign: 'center', lineHeight: 1.3,
+          marginBottom: 28, letterSpacing: '-0.3px',
+          animation: 'fadeUp .38s ease',
+        }}>
+          {huidig.vraag}
+        </div>
+
+        {/* Input */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          {huidig.type === 'mood' ? (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 20, padding: '8px 0' }}>
               {MOODS.map(m => (
-                <button key={m} onClick={() => setAntwoorden(prev => ({ ...prev, mood: m }))} style={{ fontSize: 44, background: antwoorden.mood === m ? 'rgba(242,107,29,.2)' : 'rgba(255,255,255,.05)', border: antwoorden.mood === m ? `2px solid ${DARK.orange}` : '2px solid transparent', borderRadius: 20, padding: '12px 16px', cursor: 'pointer', transform: antwoorden.mood === m ? 'scale(1.2)' : 'scale(1)', transition: 'all .15s' }}>
-                  {m}
-                </button>
+                <div key={m.emoji} onClick={() => setAntwoorden(prev => ({ ...prev, mood: m.emoji }))} style={{ textAlign: 'center', cursor: 'pointer' }}>
+                  <div style={{
+                    width: 74, height: 74, borderRadius: '50%',
+                    background: antwoorden.mood === m.emoji ? `${m.kleur}28` : 'rgba(255,255,255,.07)',
+                    border: `3px solid ${antwoorden.mood === m.emoji ? m.kleur : 'rgba(255,255,255,.15)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 40, marginBottom: 8,
+                    transform: antwoorden.mood === m.emoji ? 'scale(1.18)' : 'scale(1)',
+                    transition: 'all .2s ease',
+                    boxShadow: antwoorden.mood === m.emoji ? `0 0 22px ${m.kleur}55` : 'none',
+                  }}>{m.emoji}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.4px', color: antwoorden.mood === m.emoji ? m.kleur : 'rgba(255,255,255,.35)', transition: 'color .2s' }}>
+                    {m.label}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
             <textarea
-              value={antwoorden[huidigeVraag.key]}
-              onChange={e => setAntwoorden(prev => ({ ...prev, [huidigeVraag.key]: e.target.value }))}
-              placeholder={huidigeVraag.placeholder}
+              className="dag-placeholder"
+              value={antwoorden[huidig.key]}
+              onChange={e => setAntwoorden(prev => ({ ...prev, [huidig.key]: e.target.value }))}
+              placeholder={huidig.placeholder}
               rows={4}
-              style={{ width: '100%', padding: '14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 12, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 14, outline: 'none', resize: 'none', textAlign: 'left' }}
+              autoFocus
+              style={{
+                width: '100%', padding: '16px',
+                background: 'rgba(255,255,255,.09)',
+                backdropFilter: 'blur(8px)',
+                border: '1.5px solid rgba(255,255,255,.18)',
+                borderRadius: 16, color: '#fff',
+                fontFamily: 'Inter,sans-serif', fontSize: 15,
+                lineHeight: 1.6, outline: 'none', resize: 'none',
+              }}
             />
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        {/* Knoppen */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
           {stap > 0 && (
-            <button onClick={() => setStap(s => s - 1)} style={{ padding: '13px 20px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 99, color: DARK.sub, fontWeight: 700, cursor: 'pointer' }}>←</button>
+            <button onClick={gaTerug} style={{
+              padding: '14px 18px', background: 'rgba(255,255,255,.1)',
+              border: '1.5px solid rgba(255,255,255,.18)',
+              borderRadius: 99, color: 'rgba(255,255,255,.75)',
+              fontWeight: 700, fontSize: 16, cursor: 'pointer',
+            }}>←</button>
           )}
-          {stap < VRAGEN.length - 1 ? (
-            <button onClick={() => { if (stapGeldig()) setStap(s => s + 1) }} disabled={!stapGeldig()} style={{ flex: 1, padding: '13px', background: stapGeldig() ? DARK.orange : 'rgba(255,255,255,.06)', border: 'none', borderRadius: 99, color: stapGeldig() ? '#fff' : DARK.sub, fontWeight: 700, fontSize: 15, cursor: stapGeldig() ? 'pointer' : 'not-allowed' }}>
-              Volgende →
-            </button>
-          ) : (
-            <button onClick={verzend} disabled={!stapGeldig() || bezig} style={{ flex: 1, padding: '13px', background: DARK.green, border: 'none', borderRadius: 99, color: '#0B0F14', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
-              {bezig ? '⏳' : '✅ Opslaan +50 XP'}
-            </button>
-          )}
+          <button
+            onClick={gaVerder}
+            disabled={!stapGeldig() || bezig}
+            style={{
+              flex: 1, padding: '14px',
+              background: stapGeldig() ? huidig.accent : 'rgba(255,255,255,.08)',
+              border: 'none', borderRadius: 99,
+              color: stapGeldig() ? '#0D1420' : 'rgba(255,255,255,.25)',
+              fontFamily: 'Sora,sans-serif', fontWeight: 900,
+              fontSize: 16, cursor: stapGeldig() ? 'pointer' : 'not-allowed',
+              transition: 'all .2s ease',
+              boxShadow: stapGeldig() ? `0 4px 22px ${huidig.accent}55` : 'none',
+            }}
+          >
+            {bezig ? '⏳' : stap < STAPPEN.length - 1 ? 'Volgende →' : '✅ Opslaan +50 XP'}
+          </button>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: DARK.sub }}>
-          {fmtDag(vandaag)} · 3 vragen · klaar in 2 min 🔥
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 11, color: 'rgba(255,255,255,.3)', letterSpacing: '.5px' }}>
+          {stap + 1} / {STAPPEN.length} · {fmtDag(vandaag)}
         </div>
       </div>
 
-      {stories.length > 0 && (
-        <div style={S.card}>
-          <div style={S.label}>Eerdere dagen</div>
-          {stories.slice(0, 3).map(s => (
-            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${DARK.border}` }}>
-              <span style={{ fontSize: 13, color: DARK.sub }}>{fmtDag(s.date)}</span>
-              <span style={{ fontSize: 20 }}>{s.mood}</span>
-              <span style={{ fontSize: 11, color: DARK.green, fontWeight: 700 }}>+50 XP</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <StoriesArchief stories={stories} fmtDag={fmtDag} />
     </div>
   )
 }
