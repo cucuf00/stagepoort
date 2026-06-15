@@ -424,31 +424,31 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
   )
 }
 
+
 // ============================================================
-// WEEKSTORY TAB
+// DAGSTORY TAB
 // ============================================================
-function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
+function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
   const [stap, setStap] = useState(0)
-  const [antwoorden, setAntwoorden] = useState({ mood: '', a1: '', a2: '', a3: '' })
+  const [antwoorden, setAntwoorden] = useState({ mood: '', a1: '', a2: '' })
   const [bezig, setBezig] = useState(false)
   const [xpPop, setXpPop] = useState(false)
   const [klaar, setKlaar] = useState(false)
 
-  const [weekNr, jaar] = getWeekNumber()
-  const heeftDezeWeek = stories.some(s => s.week_number === weekNr && s.year === jaar)
+  const vandaag = new Date().toISOString().split('T')[0]
+  const heeftVandaag = stories.some(s => s.date === vandaag)
 
-  const MOODS = ['😴', '😐', '🙂', '😎', '🔥']
+  const MOODS = ['😊', '😐', '😕']
   const VRAGEN = [
-    { type: 'mood', vraag: 'Hoe was je stageweek?', emoji: '✨' },
-    { type: 'tekst', vraag: 'Wat is het tofste dat je deze week hebt gedaan?', emoji: '🏆', key: 'a1', placeholder: 'Bijv. zelf een bug opgelost...' },
-    { type: 'tekst', vraag: 'Waar liep je tegenaan?', emoji: '🧗', key: 'a2', placeholder: 'Iets wat lastig was of niet lukte...' },
-    { type: 'tekst', vraag: 'Wat wil je volgende week anders aanpakken?', emoji: '🚀', key: 'a3', placeholder: 'Eén concrete actie voor volgende week...' },
+    { type: 'tekst',  vraag: 'Wat heb ik vandaag gedaan?',            emoji: '📝', key: 'a1', placeholder: 'Beschrijf kort je werkzaamheden van vandaag...' },
+    { type: 'mood',   vraag: 'Hoe voelde ik me vandaag op stage?',    emoji: '💭', key: 'mood' },
+    { type: 'tekst',  vraag: 'Wat heb ik van vandaag geleerd?',       emoji: '💡', key: 'a2', placeholder: 'Iets nieuws wat je hebt ontdekt of geleerd...' },
   ]
 
   const stapGeldig = () => {
-    if (stap === 0) return antwoorden.mood !== ''
-    const key = VRAGEN[stap].key
-    return antwoorden[key]?.trim().length > 0
+    const vraag = VRAGEN[stap]
+    if (vraag.type === 'mood') return antwoorden.mood !== ''
+    return antwoorden[vraag.key]?.trim().length > 0
   }
 
   async function verzend() {
@@ -458,36 +458,25 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
       school_id: profile.school_id,
       student_id: profile.id,
       placement_id: placement?.id,
-      week_number: weekNr,
-      year: jaar,
+      date: vandaag,
       mood: antwoorden.mood,
       answer_1: antwoorden.a1,
       answer_2: antwoorden.a2,
-      answer_3: antwoorden.a3,
-      xp_awarded: 100,
+      xp_awarded: 50,
     }).select().single()
 
     if (!error) {
-      // XP toekennen
-      const nieuweXP = (profile.xp || 0) + 100
+      const nieuweXP = (profile.xp || 0) + 50
       const nieuweLevel = Math.floor(nieuweXP / 300) + 1
-
-      // Streak correct berekenen via database functie (controleert aaneengesloten weken)
-      const { data: streakData } = await supabase
-        .rpc('bereken_streak', { p_student_id: profile.id, p_week_number: weekNr, p_year: jaar })
-      const nieuweStreak = streakData ?? 1
+      const nieuweStreak = (profile.streak || 0) + 1
 
       await supabase.from('profiles').update({
         xp: nieuweXP,
-        streak: nieuweStreak,
         level: nieuweLevel,
-        last_story_week: weekNr,
-        last_story_year: jaar,
+        streak: nieuweStreak,
       }).eq('id', profile.id)
 
-      // Update lokale state zodat XP direct zichtbaar is
-      setProfile(prev => ({ ...prev, xp: nieuweXP, streak: nieuweStreak, level: nieuweLevel }))
-
+      setProfile(prev => ({ ...prev, xp: nieuweXP, level: nieuweLevel, streak: nieuweStreak }))
       setStories(prev => [data, ...prev])
       setXpPop(true)
       setTimeout(() => { setXpPop(false); setKlaar(true) }, 1500)
@@ -495,27 +484,40 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
     setBezig(false)
   }
 
-  if (heeftDezeWeek || klaar) return (
+  const fmtDag = (d) => {
+    if (!d) return ''
+    return new Date(d + 'T12:00:00').toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })
+  }
+
+  if (heeftVandaag || klaar) return (
     <div>
       {klaar && (
         <div style={{ ...S.card, textAlign: 'center', padding: 40, background: 'linear-gradient(135deg, rgba(74,222,128,.1), rgba(242,107,29,.1))' }}>
           <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
-          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 22, fontWeight: 800, marginBottom: 8 }}>+100 XP!</div>
-          <div style={{ fontSize: 14, color: DARK.sub }}>Weekstory ingevuld · streak gaat door 🔥</div>
+          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 22, fontWeight: 800, marginBottom: 8 }}>+50 XP!</div>
+          <div style={{ fontSize: 14, color: DARK.sub }}>Dagboek ingevuld · ga zo door 🔥</div>
+        </div>
+      )}
+      {!klaar && (
+        <div style={{ ...S.card, textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Dagboek al ingevuld vandaag</div>
+          <div style={{ fontSize: 13, color: DARK.sub }}>Kom morgen terug!</div>
         </div>
       )}
       <div style={S.card}>
-        <div style={S.label}>Eerdere weken</div>
-        {stories.map(s => (
+        <div style={S.label}>Eerdere dagen</div>
+        {stories.slice(0, 5).map(s => (
           <div key={s.id} style={{ borderBottom: `1px solid ${DARK.border}`, paddingBottom: 12, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>Week {s.week_number}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: DARK.sub }}>{fmtDag(s.date)}</span>
               <span style={{ fontSize: 20 }}>{s.mood}</span>
             </div>
-            {s.answer_1 && <div style={{ fontSize: 13, color: DARK.sub, lineHeight: 1.5 }}>🏆 {s.answer_1}</div>}
+            {s.answer_1 && <div style={{ fontSize: 13, color: DARK.text, lineHeight: 1.5, marginBottom: 4 }}>📝 {s.answer_1}</div>}
+            {s.answer_2 && <div style={{ fontSize: 13, color: DARK.sub, lineHeight: 1.5 }}>💡 {s.answer_2}</div>}
           </div>
         ))}
-        {stories.length === 0 && <div style={{ color: DARK.sub, fontSize: 13 }}>Nog geen stories</div>}
+        {stories.length === 0 && <div style={{ color: DARK.sub, fontSize: 13 }}>Nog geen dagboek entries</div>}
       </div>
     </div>
   )
@@ -526,12 +528,12 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
     <div>
       {xpPop && (
         <div style={{ position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', fontFamily: 'Sora,sans-serif', fontSize: '2.5rem', fontWeight: 800, color: DARK.green, zIndex: 300, textShadow: '0 4px 20px rgba(74,222,128,.5)', animation: 'fadeUp 1.5s ease forwards', pointerEvents: 'none' }}>
-          +100 XP ⚡
+          +50 XP ⚡
         </div>
       )}
       <style>{`@keyframes fadeUp{0%{opacity:0;transform:translate(-50%,-30%)}25%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}`}</style>
 
-      <div style={{ ...S.card, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ ...S.card, minHeight: 320, display: 'flex', flexDirection: 'column' }}>
         {/* Voortgang */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
           {VRAGEN.map((_, i) => (
@@ -541,14 +543,14 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
 
         <div style={{ textAlign: 'center', marginBottom: 24, flex: 1 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>{huidigeVraag.emoji}</div>
-          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, fontWeight: 700, marginBottom: 20, lineHeight: 1.4 }}>
+          <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 17, fontWeight: 700, marginBottom: 20, lineHeight: 1.4 }}>
             {huidigeVraag.vraag}
           </div>
 
           {huidigeVraag.type === 'mood' ? (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
               {MOODS.map(m => (
-                <button key={m} onClick={() => setAntwoorden(prev => ({ ...prev, mood: m }))} style={{ fontSize: 36, background: antwoorden.mood === m ? 'rgba(242,107,29,.2)' : 'rgba(255,255,255,.05)', border: antwoorden.mood === m ? `2px solid ${DARK.orange}` : '2px solid transparent', borderRadius: 16, padding: '10px 14px', cursor: 'pointer', transform: antwoorden.mood === m ? 'scale(1.15)' : 'scale(1)', transition: 'all .15s' }}>
+                <button key={m} onClick={() => setAntwoorden(prev => ({ ...prev, mood: m }))} style={{ fontSize: 44, background: antwoorden.mood === m ? 'rgba(242,107,29,.2)' : 'rgba(255,255,255,.05)', border: antwoorden.mood === m ? `2px solid ${DARK.orange}` : '2px solid transparent', borderRadius: 20, padding: '12px 16px', cursor: 'pointer', transform: antwoorden.mood === m ? 'scale(1.2)' : 'scale(1)', transition: 'all .15s' }}>
                   {m}
                 </button>
               ))}
@@ -568,30 +570,30 @@ function WeekstoryTab({ profile, placement, stories, setStories, setProfile }) {
           {stap > 0 && (
             <button onClick={() => setStap(s => s - 1)} style={{ padding: '13px 20px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 99, color: DARK.sub, fontWeight: 700, cursor: 'pointer' }}>←</button>
           )}
-          {stap < 3 ? (
+          {stap < VRAGEN.length - 1 ? (
             <button onClick={() => { if (stapGeldig()) setStap(s => s + 1) }} disabled={!stapGeldig()} style={{ flex: 1, padding: '13px', background: stapGeldig() ? DARK.orange : 'rgba(255,255,255,.06)', border: 'none', borderRadius: 99, color: stapGeldig() ? '#fff' : DARK.sub, fontWeight: 700, fontSize: 15, cursor: stapGeldig() ? 'pointer' : 'not-allowed' }}>
               Volgende →
             </button>
           ) : (
             <button onClick={verzend} disabled={!stapGeldig() || bezig} style={{ flex: 1, padding: '13px', background: DARK.green, border: 'none', borderRadius: 99, color: '#0B0F14', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
-              {bezig ? '⏳' : '✅ Verzenden +100 XP'}
+              {bezig ? '⏳' : '✅ Opslaan +50 XP'}
             </button>
           )}
         </div>
 
         <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: DARK.sub }}>
-          Week {weekNr} · 4 swipes en je bent klaar 🔥
+          {fmtDag(vandaag)} · 3 vragen · klaar in 2 min 🔥
         </div>
       </div>
 
       {stories.length > 0 && (
         <div style={S.card}>
-          <div style={S.label}>Eerdere weken</div>
+          <div style={S.label}>Eerdere dagen</div>
           {stories.slice(0, 3).map(s => (
             <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${DARK.border}` }}>
-              <span style={{ fontSize: 13, color: DARK.sub }}>Week {s.week_number}</span>
+              <span style={{ fontSize: 13, color: DARK.sub }}>{fmtDag(s.date)}</span>
               <span style={{ fontSize: 20 }}>{s.mood}</span>
-              <span style={{ fontSize: 11, color: DARK.green, fontWeight: 700 }}>+100 XP</span>
+              <span style={{ fontSize: 11, color: DARK.green, fontWeight: 700 }}>+50 XP</span>
             </div>
           ))}
         </div>
@@ -680,7 +682,7 @@ export default function StudentDashboard() {
     { key: 'stage', label: '🧭', sub: 'Mijn stage' },
     { key: 'uren', label: '⏱', sub: 'Uren' },
     { key: 'opdrachten', label: '📁', sub: 'Opdrachten' },
-    { key: 'story', label: '✨', sub: 'Weekstory' },
+    { key: 'story', label: '📖', sub: 'Dagboek' },
   ]
 
   return (
@@ -703,7 +705,7 @@ export default function StudentDashboard() {
         {tab === 'stage' && <MijnStageTab profile={profile} placement={placement} badges={badges} studentBadges={studentBadges} klassement={klassement} klasKlassement={klasKlassement} uren={uren} />}
         {tab === 'uren' && <UrenTab profile={profile} placement={placement} uren={uren} setUren={setUren} />}
         {tab === 'opdrachten' && <OpdrachtenTab profile={profile} placement={placement} opdrachten={opdrachten} inleveringen={inleveringen} setInleveringen={setInleveringen} setProfile={setProfile} />}
-        {tab === 'story' && <WeekstoryTab profile={profile} placement={placement} stories={stories} setStories={setStories} setProfile={setProfile} />}
+        {tab === 'story' && <DagstoryTab profile={profile} placement={placement} stories={stories} setStories={setStories} setProfile={setProfile} />}
       </div>
 
       {/* Bottom nav */}

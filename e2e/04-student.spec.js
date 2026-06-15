@@ -27,13 +27,13 @@ test.describe('Student dashboard', () => {
     ).toBeVisible({ timeout: 10_000 })
   })
 
-  test('weekstory tab laadt', async ({ page }) => {
+  test('dagboek tab laadt', async ({ page }) => {
     await loginAs(page, STUDENT_EMAIL)
     if (page.url().includes('/onboarding')) { test.skip(true, 'Onboarding actief'); return }
     // Klik op de ✨ Weekstory tab via de sub-tekst of emoji
-    await page.locator('button').filter({ hasText: /Weekstory|✨/ }).first().click()
+    await page.locator('button').filter({ hasText: /Dagboek|📖/ }).first().click()
     await page.waitForTimeout(1000)
-    const heeftContent = await page.locator('text=/week|story|mood|hoe was|Weekstory/i').first().isVisible()
+    const heeftContent = await page.locator('text=/vandaag|dagboek|gedaan|geleerd|Dagboek/i').first().isVisible()
     expect(heeftContent).toBeTruthy()
   })
 
