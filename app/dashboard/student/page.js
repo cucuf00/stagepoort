@@ -332,39 +332,48 @@ function UrenTab({ profile, placement, uren, setUren }) {
 }
 
 // ============================================================
-// OPDRACHTEN TAB
+// OPDRACHTEN TAB — wizard per vraag
 // ============================================================
 function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleveringen, setProfile }) {
-  const [actief, setActief] = useState(null)
-  const [antwoord, setAntwoord] = useState('')
-  const [bezig, setBezig] = useState(false)
+  const [actief, setActief]     = useState(null)
+  const [stapIdx, setStapIdx]   = useState(0)
+  const [antwoorden, setAntwoorden] = useState({})
+  const [bezig, setBezig]       = useState(false)
+  const MIN = 30
+
+  function start(op) {
+    setActief(op.id)
+    setStapIdx(0)
+    setAntwoorden({})
+  }
+
+  function annuleer() { setActief(null); setStapIdx(0); setAntwoorden({}) }
 
   async function lever(assignmentId) {
-    if (!antwoord.trim()) return
     setBezig(true)
     const supabase = createClient()
     const opdracht = opdrachten.find(o => o.id === assignmentId)
     const xpBeloning = opdracht?.xp_reward || 100
+    const vragen = opdracht?.questions || []
+    const answerPayload = vragen.length > 0 ? JSON.stringify(antwoorden) : (antwoorden['_'] || '')
 
     const { data, error } = await supabase.from('student_assignments').upsert({
       school_id: profile.school_id,
       assignment_id: assignmentId,
       student_id: profile.id,
-      placement_id: placement?.id,
+      placement_id: placement?.id ?? null,
       status: 'submitted',
-      answer: antwoord,
+      answer: answerPayload,
       submitted_at: new Date().toISOString(),
     }, { onConflict: 'assignment_id,student_id' }).select().single()
 
     if (!error) {
-      // XP toekennen
       const nieuweXP = (profile.xp || 0) + xpBeloning
       const nieuweLevel = Math.floor(nieuweXP / 300) + 1
       await supabase.from('profiles').update({ xp: nieuweXP, level: nieuweLevel }).eq('id', profile.id)
       setProfile(prev => ({ ...prev, xp: nieuweXP, level: nieuweLevel }))
       setInleveringen(prev => [...prev.filter(i => i.assignment_id !== assignmentId), data])
-      setActief(null)
-      setAntwoord('')
+      annuleer()
     }
     setBezig(false)
   }
@@ -374,9 +383,12 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
       {opdrachten.map(op => {
         const inlevering = inleveringen.find(i => i.assignment_id === op.id)
         const status = inlevering?.status || 'open'
+        const vragen = op.questions || []
+        const isOpen = actief === op.id
 
         return (
-          <div key={op.id} style={{ ...S.card }}>
+          <div key={op.id} style={S.card}>
+            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{op.title}</div>
@@ -387,56 +399,99 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                {status === 'graded' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(74,222,128,.25)', color: DARK.green }}>Beoordeeld</span>}
+                {status === 'graded'    && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(74,222,128,.25)', color: DARK.green }}>Beoordeeld</span>}
                 {status === 'submitted' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(251,191,36,.25)', color: '#FBBF24' }}>Ingeleverd</span>}
-                {status === 'open' && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.07)', color: DARK.sub }}>Open</span>}
+                {status === 'open'      && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.07)', color: DARK.sub }}>Open</span>}
               </div>
             </div>
 
-            {status === 'open' && (
-              actief === op.id ? (
-                <div style={{ marginTop: 12 }}>
-                  {/* Vragen als leidraad */}
-                  {(op.questions || []).length > 0 && (
-                    <div style={{ background: 'rgba(242,107,29,.07)', border: '1px solid rgba(242,107,29,.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: DARK.orange, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>
-                        Beantwoord de volgende vragen:
-                      </div>
-                      {(op.questions || []).map((vr, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: DARK.orange, minWidth: 18, marginTop: 1 }}>{i + 1}.</span>
-                          <div>
-                            <div style={{ fontSize: 13, color: DARK.text, lineHeight: 1.4 }}>{vr.v}</div>
-                            {vr.hint && <div style={{ fontSize: 11, color: DARK.sub, marginTop: 2 }}>💡 {vr.hint}</div>}
-                          </div>
-                        </div>
-                      ))}
+            {/* Wizard */}
+            {status === 'open' && isOpen && vragen.length > 0 && (() => {
+              const vr = vragen[stapIdx]
+              const huidigeAntwoord = antwoorden[vr.id] || ''
+              const geldig = huidigeAntwoord.trim().length >= MIN
+              const isLaatste = stapIdx === vragen.length - 1
+              const nogNodig = Math.max(0, MIN - huidigeAntwoord.trim().length)
+
+              return (
+                <div style={{ marginTop: 14 }}>
+                  {/* Voortgangsbalk */}
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+                    {vragen.map((_, i) => (
+                      <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i <= stapIdx ? DARK.orange : 'rgba(255,255,255,.15)' }} />
+                    ))}
+                  </div>
+
+                  {/* Vraag */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: DARK.orange, letterSpacing: '.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Vraag {stapIdx + 1} van {vragen.length}
                     </div>
-                  )}
-                  <textarea value={antwoord} onChange={e => setAntwoord(e.target.value)} placeholder="Schrijf hier je antwoorden op de vragen hierboven..." rows={6} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 13, outline: 'none', resize: 'none', marginBottom: 10 }} />
+                    <div style={{ fontSize: 15, fontWeight: 700, color: DARK.text, lineHeight: 1.4, marginBottom: vr.hint ? 6 : 0 }}>{vr.v}</div>
+                    {vr.hint && <div style={{ fontSize: 12, color: DARK.sub }}>💡 {vr.hint}</div>}
+                  </div>
+
+                  {/* Tekstvak */}
+                  <textarea
+                    value={huidigeAntwoord}
+                    onChange={e => setAntwoorden(prev => ({ ...prev, [vr.id]: e.target.value }))}
+                    placeholder="Schrijf hier je antwoord..."
+                    rows={4}
+                    autoFocus
+                    style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${geldig ? 'rgba(242,107,29,.5)' : DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 13, outline: 'none', resize: 'none', marginBottom: 6 }}
+                  />
+
+                  {/* Teller */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, color: nogNodig > 0 ? DARK.sub : DARK.orange, fontWeight: nogNodig === 0 ? 700 : 400 }}>
+                      {nogNodig > 0 ? `Nog ${nogNodig} tekens` : '✓ Genoeg!'}
+                    </span>
+                    <span style={{ fontSize: 11, color: DARK.sub }}>{huidigeAntwoord.trim().length} / {MIN}</span>
+                  </div>
+                  <div style={{ height: 3, borderRadius: 99, background: 'rgba(255,255,255,.1)', marginBottom: 14, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 99, background: geldig ? DARK.orange : 'rgba(255,255,255,.2)', width: `${Math.min(100, (huidigeAntwoord.trim().length / MIN) * 100)}%`, transition: 'width .2s' }} />
+                  </div>
+
+                  {/* Knoppen */}
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => lever(op.id)} disabled={!antwoord.trim() || bezig} style={{ flex: 1, padding: '11px', background: DARK.orange, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                      {bezig ? '⏳' : `Inleveren +${op.xp_reward || 100} XP ⚡`}
-                    </button>
-                    <button onClick={() => setActief(null)} style={{ padding: '11px 16px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: DARK.sub, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Annuleer</button>
+                    {stapIdx > 0 && (
+                      <button onClick={() => setStapIdx(s => s - 1)} style={{ padding: '10px 14px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: DARK.sub, fontWeight: 700, cursor: 'pointer' }}>←</button>
+                    )}
+                    {!isLaatste ? (
+                      <button onClick={() => { if (geldig) setStapIdx(s => s + 1) }} disabled={!geldig} style={{ flex: 1, padding: '10px', background: geldig ? DARK.orange : 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: geldig ? '#fff' : DARK.sub, fontWeight: 700, fontSize: 13, cursor: geldig ? 'pointer' : 'not-allowed' }}>
+                        Volgende vraag →
+                      </button>
+                    ) : (
+                      <button onClick={() => { if (geldig) lever(op.id) }} disabled={!geldig || bezig} style={{ flex: 1, padding: '10px', background: geldig ? DARK.green : 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: geldig ? '#0D1420' : DARK.sub, fontWeight: 800, fontSize: 13, cursor: geldig ? 'pointer' : 'not-allowed' }}>
+                        {bezig ? '⏳' : `✅ Inleveren +${op.xp_reward || 100} XP ⚡`}
+                      </button>
+                    )}
+                    <button onClick={annuleer} style={{ padding: '10px 14px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: DARK.sub, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>✕</button>
                   </div>
                 </div>
-              ) : (
-                <button onClick={() => setActief(op.id)} style={{ width: '100%', padding: '10px', background: 'rgba(242,107,29,.12)', border: `1px solid rgba(242,107,29,.3)`, borderRadius: 10, color: DARK.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
-                  Start opdracht · +{op.xp_reward || 100} XP ⚡
-                </button>
               )
+            })()}
+
+            {/* Geen vragen: simpel tekstvak */}
+            {status === 'open' && isOpen && vragen.length === 0 && (
+              <div style={{ marginTop: 12 }}>
+                <textarea value={antwoorden['_'] || ''} onChange={e => setAntwoorden({ '_': e.target.value })} placeholder="Schrijf hier je antwoord..." rows={5} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 13, outline: 'none', resize: 'none', marginBottom: 10 }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => lever(op.id)} disabled={!(antwoorden['_'] || '').trim() || bezig} style={{ flex: 1, padding: '11px', background: DARK.orange, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{bezig ? '⏳' : `Inleveren +${op.xp_reward || 100} XP ⚡`}</button>
+                  <button onClick={annuleer} style={{ padding: '11px 16px', background: 'rgba(255,255,255,.06)', border: 'none', borderRadius: 10, color: DARK.sub, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>✕</button>
+                </div>
+              </div>
+            )}
+
+            {/* Start knop */}
+            {status === 'open' && !isOpen && (
+              <button onClick={() => start(op)} style={{ width: '100%', padding: '10px', background: 'rgba(242,107,29,.12)', border: `1px solid rgba(242,107,29,.3)`, borderRadius: 10, color: DARK.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
+                Start opdracht · {vragen.length > 0 ? `${vragen.length} vragen` : ''} +{op.xp_reward || 100} XP ⚡
+              </button>
             )}
           </div>
         )
       })}
-
-      {opdrachten.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: DARK.sub }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-          <div style={{ fontSize: 14 }}>Nog geen opdrachten klaargezet</div>
-        </div>
-      )}
     </div>
   )
 }
