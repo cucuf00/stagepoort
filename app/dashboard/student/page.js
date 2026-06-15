@@ -468,9 +468,11 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
   const heeftVandaag = stories.some(s => s.date === vandaag)
 
   const MOODS = [
-    { emoji: '😊', label: 'Goed!',   kleur: '#34D399' },
-    { emoji: '😐', label: 'Oké',     kleur: '#FBBF24' },
-    { emoji: '😕', label: 'Lastig',  kleur: '#F87171' },
+    { emoji: '🔥', label: 'Top dag!', kleur: '#F97316' },
+    { emoji: '😊', label: 'Goed!',    kleur: '#34D399' },
+    { emoji: '😐', label: 'Oké',      kleur: '#FBBF24' },
+    { emoji: '😕', label: 'Lastig',   kleur: '#F87171' },
+    { emoji: '😴', label: 'Zwaar',    kleur: '#A78BFA' },
   ]
 
   const STAPPEN = [
@@ -501,10 +503,13 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
 
   const huidig = STAPPEN[stap]
 
+  const MIN_TEKENS = 40
   const stapGeldig = () => {
     if (huidig.type === 'mood') return antwoorden.mood !== ''
-    return antwoorden[huidig.key]?.trim().length > 0
+    return (antwoorden[huidig.key] || '').trim().length >= MIN_TEKENS
   }
+  const aantalTekens = (huidig.type === 'tekst') ? (antwoorden[huidig.key] || '').trim().length : 0
+  const nogNodig = Math.max(0, MIN_TEKENS - aantalTekens)
 
   const gaVerder = () => {
     if (!stapGeldig() || bezig) return
@@ -668,12 +673,23 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
                 width: '100%', padding: '16px',
                 background: 'rgba(255,255,255,.09)',
                 backdropFilter: 'blur(8px)',
-                border: '1.5px solid rgba(255,255,255,.18)',
+                border: `1.5px solid ${stapGeldig() ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.18)'}`,
                 borderRadius: 16, color: '#fff',
                 fontFamily: 'Inter,sans-serif', fontSize: 15,
                 lineHeight: 1.6, outline: 'none', resize: 'none',
               }}
             />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+              {nogNodig > 0 ? (
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>
+                  nog {nogNodig} tekens
+                </span>
+              ) : (
+                <span style={{ fontSize: 12, color: huidig.accent, fontWeight: 700 }}>
+                  ✓ {aantalTekens} tekens
+                </span>
+              )}
+            </div>
           )}
         </div>
 
