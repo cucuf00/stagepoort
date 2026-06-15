@@ -503,7 +503,7 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
 
   const huidig = STAPPEN[stap]
 
-  const MIN_TEKENS = 40
+  const MIN_TEKENS = 50
   const stapGeldig = () => {
     if (huidig.type === 'mood') return antwoorden.mood !== ''
     return (antwoorden[huidig.key] || '').trim().length >= MIN_TEKENS
@@ -679,16 +679,22 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
                 lineHeight: 1.6, outline: 'none', resize: 'none',
               }}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-              {nogNodig > 0 ? (
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>
-                  nog {nogNodig} tekens
+            {/* Teller */}
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: nogNodig > 0 ? 'rgba(255,255,255,.5)' : huidig.accent }}>
+                  {nogNodig > 0 ? `Schrijf nog ${nogNodig} tekens` : '✓ Genoeg geschreven!'}
                 </span>
-              ) : (
-                <span style={{ fontSize: 12, color: huidig.accent, fontWeight: 700 }}>
-                  ✓ {aantalTekens} tekens
-                </span>
-              )}
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>{aantalTekens} / {MIN_TEKENS}</span>
+              </div>
+              <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 99,
+                  background: nogNodig > 0 ? 'rgba(255,255,255,.3)' : huidig.accent,
+                  width: `${Math.min(100, (aantalTekens / MIN_TEKENS) * 100)}%`,
+                  transition: 'width .2s ease, background .3s ease',
+                }} />
+              </div>
             </div>
           </>) }
         </div>
