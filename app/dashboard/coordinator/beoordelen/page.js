@@ -40,8 +40,9 @@ export default function BeoordelenPage() {
   const [inleveringen, setInleveringen] = useState([])
   const [opdrachten, setOpdrachten] = useState([])
   const [showBeoordeel, setShowBeoordeel] = useState(null)
-  const [beoordeelForm, setBeoordeelForm] = useState({ grade: '', feedback: '' })
+  const [beoordeelForms, setBeoordeelForms] = useState({}) // per inv.id
   const [opdrBezig, setOpdrBezig] = useState({})
+  const [bevestigAlles, setBevestigAlles] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -141,13 +142,15 @@ export default function BeoordelenPage() {
 
     if (!error) {
       setUren([])
+      setBevestigAlles(false)
       showToast(`✅ Alle ${ids.length} urenregels goedgekeurd!`)
     } else showToast('❌ ' + error.message, false)
   }
 
   // ===== OPDRACHTEN BEOORDELEN =====
   async function beoordeelOpdracht(invId) {
-    const grade = parseFloat(beoordeelForm.grade)
+    const form = beoordeelForms[invId] || {}
+    const grade = parseFloat(form.grade)
     if (!grade || grade < 1 || grade > 10) { showToast('❌ Vul een geldig cijfer in (1-10)', false); return }
     setOpdrBezig(prev => ({ ...prev, [invId]: true }))
     const supabase = createClient()
@@ -155,7 +158,7 @@ export default function BeoordelenPage() {
     const { error } = await supabase.from('student_assignments').update({
       status: 'graded',
       grade: grade,
-      feedback: beoordeelForm.feedback || null,
+      feedback: form.feedback || null,
       graded_by: profile.id,
       graded_at: new Date().toISOString(),
     }).eq('id', invId)
@@ -163,7 +166,7 @@ export default function BeoordelenPage() {
     if (!error) {
       setInleveringen(prev => prev.filter(i => i.id !== invId))
       setShowBeoordeel(null)
-      setBeoordeelForm({ grade: '', feedback: '' })
+      setBeoordeelForms(prev => { const n = { ...prev }; delete n[invId]; return n })
       showToast(`✅ Beoordeeld — cijfer ${grade.toFixed(1)} opgeslagen!`)
     } else showToast('❌ ' + error.message, false)
     setOpdrBezig(prev => ({ ...prev, [invId]: false }))
@@ -216,9 +219,21 @@ export default function BeoordelenPage() {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ fontSize: 14, color: '#5C6B7A' }}>{uren.length} urenregel{uren.length > 1 ? 's' : ''} wacht op goedkeuring</div>
-                  <button onClick={keurAlleGoed} style={{ padding: '8px 18px', background: '#1A7F52', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                    ✅ Keur alles goed
-                  </button>
+                  {bevestigAlles ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, color: '#C03020', fontWeight: 600 }}>Zeker weten?</span>
+                      <button onClick={keurAlleGoed} style={{ padding: '7px 14px', background: '#1A7F52', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                        Ja, alles goedkeuren
+                      </button>
+                      <button onClick={() => setBevestigAlles(false)} style={{ padding: '7px 12px', background: '#F0EDE8', border: 'none', borderRadius: 8, color: '#5C6B7A', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                        Annuleren
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setBevestigAlles(true)} style={{ padding: '8px 18px', background: '#1A7F52', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                      ✅ Keur alles goed
+                    </button>
+                  )}
                 </div>
 
                 {uren.map(u => {
@@ -303,8 +318,16 @@ export default function BeoordelenPage() {
                 {inleveringen.map(inv => {
                   const student = getStudentById(inv.student_id)
                   const opdracht = opdrachten.find(o => o.id === inv.assignment_id)
-                  const maxPunten = (opdracht?.questions || []).reduce((t, v) => t + (v.punten || 0), 0) || opdracht?.max_points || 10
+                  const vragen = opdracht?.questions || []
+                  const maxPunten = vragen.reduce((t, v) => t + (v.punten || 0), 0) || opdracht?.max_points || 10
                   const isOpen = showBeoordeel === inv.id
+                  const form = beoordeelForms[inv.id] || { grade: '', feedback: '' }
+
+                  // Antwoorden ontleden
+                  let antwoordenMap = {}
+                  if (vragen.length > 0) {
+                    try { antwoordenMap = JSON.parse(inv.answer || '{}') } catch {}
+                  }
 
                   return (
                     <div key={inv.id} style={{ background: '#fff', border: '1px solid #E4DDD4', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
@@ -335,12 +358,24 @@ export default function BeoordelenPage() {
 
                       {isOpen && (
                         <div style={{ borderTop: '1px solid #E4DDD4', padding: '16px 20px', background: '#FAFAF8' }}>
-                          {/* Antwoord leerling */}
+                          {/* Antwoord leerling — per vraag of vrije tekst */}
                           <div style={{ marginBottom: 16 }}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: '#5C6B7A', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Antwoord leerling</div>
-                            <div style={{ background: '#fff', border: '1px solid #E4DDD4', borderRadius: 10, padding: 14, fontSize: 14, color: '#1A2633', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                              {inv.answer || '—'}
-                            </div>
+                            {vragen.length > 0 ? vragen.map((vr, i) => {
+                              const ant = antwoordenMap[vr.id] || antwoordenMap[String(vr.id)] || '—'
+                              return (
+                                <div key={i} style={{ background: '#fff', border: '1px solid #E4DDD4', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#5C6B7A', marginBottom: 4 }}>
+                                    Vraag {i + 1} · {vr.v || vr.vraag} <span style={{ fontWeight: 400 }}>({vr.punten || 0} pnt)</span>
+                                  </div>
+                                  <div style={{ fontSize: 13, color: '#1A2633', lineHeight: 1.6 }}>{ant}</div>
+                                </div>
+                              )
+                            }) : (
+                              <div style={{ background: '#fff', border: '1px solid #E4DDD4', borderRadius: 10, padding: 14, fontSize: 14, color: '#1A2633', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                                {inv.answer || '—'}
+                              </div>
+                            )}
                           </div>
 
                           {/* Beoordeling invullen */}
@@ -351,15 +386,15 @@ export default function BeoordelenPage() {
                               </label>
                               <input
                                 type="number" min="1" max="10" step="0.1"
-                                value={beoordeelForm.grade}
-                                onChange={e => setBeoordeelForm(p => ({ ...p, grade: e.target.value }))}
+                                value={form.grade}
+                                onChange={e => setBeoordeelForms(prev => ({ ...prev, [inv.id]: { ...form, grade: e.target.value } }))}
                                 placeholder="7.5"
                                 style={{ ...inputStyle, fontSize: 16, fontWeight: 700, textAlign: 'center' }}
                                 onClick={e => e.stopPropagation()}
                               />
-                              {beoordeelForm.grade && (
-                                <div style={{ fontSize: 11, color: parseFloat(beoordeelForm.grade) >= 5.5 ? '#1A7F52' : '#C03020', marginTop: 4, textAlign: 'center', fontWeight: 700 }}>
-                                  {parseFloat(beoordeelForm.grade) >= 5.5 ? '✅ Voldoende' : '❌ Onvoldoende'}
+                              {form.grade && (
+                                <div style={{ fontSize: 11, color: parseFloat(form.grade) >= 5.5 ? '#1A7F52' : '#C03020', marginTop: 4, textAlign: 'center', fontWeight: 700 }}>
+                                  {parseFloat(form.grade) >= 5.5 ? '✅ Voldoende' : '❌ Onvoldoende'}
                                 </div>
                               )}
                             </div>
@@ -368,8 +403,8 @@ export default function BeoordelenPage() {
                                 Feedback (optioneel)
                               </label>
                               <textarea
-                                value={beoordeelForm.feedback}
-                                onChange={e => setBeoordeelForm(p => ({ ...p, feedback: e.target.value }))}
+                                value={form.feedback}
+                                onChange={e => setBeoordeelForms(prev => ({ ...prev, [inv.id]: { ...form, feedback: e.target.value } }))}
                                 placeholder="Geef een toelichting op het cijfer..."
                                 rows={3}
                                 style={{ ...inputStyle, resize: 'none' }}
@@ -380,8 +415,8 @@ export default function BeoordelenPage() {
 
                           <button
                             onClick={e => { e.stopPropagation(); beoordeelOpdracht(inv.id) }}
-                            disabled={!beoordeelForm.grade || opdrBezig[inv.id]}
-                            style={{ padding: '10px 22px', background: beoordeelForm.grade ? '#F26B1D' : '#E4DDD4', border: 'none', borderRadius: 10, color: beoordeelForm.grade ? '#fff' : '#9AA8B2', fontWeight: 700, fontSize: 14, cursor: beoordeelForm.grade ? 'pointer' : 'not-allowed' }}
+                            disabled={!form.grade || opdrBezig[inv.id]}
+                            style={{ padding: '10px 22px', background: form.grade ? '#F26B1D' : '#E4DDD4', border: 'none', borderRadius: 10, color: form.grade ? '#fff' : '#9AA8B2', fontWeight: 700, fontSize: 14, cursor: form.grade ? 'pointer' : 'not-allowed' }}
                           >
                             {opdrBezig[inv.id] ? '⏳ Opslaan...' : '💾 Beoordeling opslaan'}
                           </button>

@@ -354,12 +354,17 @@ function NakijkenTab({ profile, inleveringen, opdrachten, studenten, placements,
       </div>
 
       {/* Per vraag nakijken */}
-      {vragen.length > 0 ? vragen.map((vr, i) => (
+      {vragen.length > 0 ? (() => {
+        let antwoordenMap = {}
+        try { antwoordenMap = JSON.parse(actieveInlevering?.answer || '{}') } catch {}
+        return vragen.map((vr, i) => {
+          const antwoord = antwoordenMap[vr.id] || antwoordenMap[String(vr.id)] || '(geen antwoord)'
+          return (
         <div key={i} style={{ ...card, marginBottom: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Vraag {i + 1} · max {vr.punten || 0} punten</div>
           <div style={{ fontSize: 13, color: C.sub, marginBottom: 10 }}>{vr.v || vr.vraag}</div>
           <div style={{ background: '#F7F3EE', borderRadius: 8, padding: 12, fontSize: 13, color: C.ink, lineHeight: 1.6, marginBottom: 12 }}>
-            💬 <em>{actieveInlevering?.answer || '(geen antwoord)'}</em>
+            💬 <em>{antwoord}</em>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: C.sub }}>Punten:</span>
@@ -370,7 +375,9 @@ function NakijkenTab({ profile, inleveringen, opdrachten, studenten, placements,
             ))}
           </div>
         </div>
-      )) : (
+          )
+        })
+      })() : (
         <div style={{ ...card, marginBottom: 10 }}>
           <div style={{ ...lbl, marginBottom: 8 }}>Antwoord student</div>
           <div style={{ background: '#F7F3EE', borderRadius: 8, padding: 14, fontSize: 14, color: C.ink, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
