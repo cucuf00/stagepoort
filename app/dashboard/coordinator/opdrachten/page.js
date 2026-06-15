@@ -25,6 +25,8 @@ export default function OpdrachtenPage() {
   const [openEval, setOpenEval] = useState(null)
   const [bezig, setBezig] = useState({})
   const [toast, setToast] = useState(null)
+  const [sjablonen, setSjablonen] = useState([])
+  const [sjabloonBezig, setSjabloonBezig] = useState(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -35,14 +37,16 @@ export default function OpdrachtenPage() {
       if (!prof || prof.role !== 'coordinator') { router.replace('/login'); return }
       setProfile(prof)
 
-      const [{ data: pers }, { data: opdr }, { data: eval_ }, { data: bdgs }] = await Promise.all([
+      const [{ data: pers }, { data: opdr }, { data: eval_ }, { data: bdgs }, { data: sjabl }] = await Promise.all([
         supabase.from('stage_periods').select('*').eq('school_id', prof.school_id).order('start_date'),
         supabase.from('assignments').select('*').eq('school_id', prof.school_id).order('sort_order'),
         supabase.from('evaluation_moments').select('*').eq('school_id', prof.school_id).order('sort_order'),
         supabase.from('badges').select('*').eq('school_id', prof.school_id).order('sort_order'),
+        supabase.from('assignment_templates').select('*').order('sort_order'),
       ])
 
       setPeriodes(pers ?? [])
+      setSjablonen(sjabl ?? [])
       setOpdrachten(opdr ?? [])
       setEvalMomenten(eval_ ?? [])
       setBadges(bdgs ?? [])
@@ -55,6 +59,29 @@ export default function OpdrachtenPage() {
   function showToast(msg, ok = true) {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  async function voegSjabloonToe(sjabloon) {
+    if (!actievePeriode) { showToast('Selecteer eerst een stageblok', false); return }
+    setSjabloonBezig(sjabloon.id)
+    const supabase = createClient()
+    const { data, error } = await supabase.from('assignments').insert({
+      school_id: profile.school_id,
+      period_id: actievePeriode,
+      title: sjabloon.title,
+      description: sjabloon.description,
+      questions: sjabloon.questions,
+      max_points: sjabloon.max_points,
+      xp_reward: sjabloon.xp_reward,
+      sort_order: opdrachten.filter(o => o.period_id === actievePeriode).length,
+    }).select().single()
+    if (!error) {
+      setOpdrachten(prev => [...prev, data])
+      showToast(`✅ "${sjabloon.title}" toegevoegd aan blok`)
+    } else {
+      showToast('Fout bij toevoegen', false)
+    }
+    setSjabloonBezig(null)
   }
 
   // ===== OPDRACHTEN =====
@@ -261,6 +288,43 @@ export default function OpdrachtenPage() {
         {activePeriodeData && (
           <div style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 16 }}>
             📅 {fmtDatum(activePeriodeData.start_date)} t/m {fmtDatum(activePeriodeData.end_date)} · urendoel {activePeriodeData.hours_goal} uur
+          </div>
+        )}
+
+        {/* ===== SJABLONEN BIBLIOTHEEK ===== */}
+        {sjablonen.length > 0 && (
+          <div style={{ background: '#F0F7FF', border: '1px solid #C7DFF7', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 18 }}>📚</span>
+              <span style={{ fontFamily: 'Sora,sans-serif', fontSize: 15, fontWeight: 700, color: '#1A3C5E' }}>Sjablonen bibliotheek</span>
+            </div>
+            <p style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 14, lineHeight: 1.5 }}>
+              Kant-en-klare opdrachten — klik op "Toevoegen" om ze aan het geselecteerde stageblok toe te voegen.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {sjablonen.map(sj => {
+                const alToegevoegd = opdrachten.some(o => o.title === sj.title && o.period_id === actievePeriode)
+                return (
+                  <div key={sj.id} style={{ background: '#fff', border: '1px solid #C7DFF7', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: '#1A3C5E', marginBottom: 2 }}>{sj.title}</div>
+                      <div style={{ fontSize: 12, color: '#5C6B7A' }}>{(sj.questions || []).length} vragen · {sj.xp_reward} XP</div>
+                    </div>
+                    {alToegevoegd ? (
+                      <span style={{ fontSize: 12, color: '#1A7F52', fontWeight: 700, padding: '5px 12px', background: '#E6F7EF', borderRadius: 20 }}>✓ Al toegevoegd</span>
+                    ) : (
+                      <button
+                        onClick={() => voegSjabloonToe(sj)}
+                        disabled={sjabloonBezig === sj.id}
+                        style={{ padding: '7px 14px', background: '#1A3C5E', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        {sjabloonBezig === sj.id ? '⏳' : '+ Toevoegen'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 
