@@ -396,7 +396,24 @@ function OpdrachtenTab({ profile, placement, opdrachten, inleveringen, setInleve
             {status === 'open' && (
               actief === op.id ? (
                 <div style={{ marginTop: 12 }}>
-                  <textarea value={antwoord} onChange={e => setAntwoord(e.target.value)} placeholder="Schrijf hier je antwoord..." rows={4} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 13, outline: 'none', resize: 'none', marginBottom: 10 }} />
+                  {/* Vragen als leidraad */}
+                  {(op.questions || []).length > 0 && (
+                    <div style={{ background: 'rgba(242,107,29,.07)', border: '1px solid rgba(242,107,29,.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: DARK.orange, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>
+                        Beantwoord de volgende vragen:
+                      </div>
+                      {(op.questions || []).map((vr, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: DARK.orange, minWidth: 18, marginTop: 1 }}>{i + 1}.</span>
+                          <div>
+                            <div style={{ fontSize: 13, color: DARK.text, lineHeight: 1.4 }}>{vr.v}</div>
+                            {vr.hint && <div style={{ fontSize: 11, color: DARK.sub, marginTop: 2 }}>💡 {vr.hint}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <textarea value={antwoord} onChange={e => setAntwoord(e.target.value)} placeholder="Schrijf hier je antwoorden op de vragen hierboven..." rows={6} style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.06)', border: `1px solid ${DARK.border}`, borderRadius: 10, color: DARK.text, fontFamily: 'Inter,sans-serif', fontSize: 13, outline: 'none', resize: 'none', marginBottom: 10 }} />
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => lever(op.id)} disabled={!antwoord.trim() || bezig} style={{ flex: 1, padding: '11px', background: DARK.orange, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
                       {bezig ? '⏳' : `Inleveren +${op.xp_reward || 100} XP ⚡`}
