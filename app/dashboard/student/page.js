@@ -521,21 +521,30 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
     setStap(s => s - 1)
   }
 
+  const [foutmelding, setFoutmelding] = useState('')
+
   async function verzend() {
     setBezig(true)
-    const supabase = createClient()
-    const { data, error } = await supabase.from('week_stories').insert({
-      school_id: profile.school_id,
-      student_id: profile.id,
-      placement_id: placement?.id,
-      date: vandaag,
-      mood: antwoorden.mood,
-      answer_1: antwoorden.a1,
-      answer_2: antwoorden.a2,
-      xp_awarded: 50,
-    }).select().single()
+    setFoutmelding('')
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.from('week_stories').insert({
+        school_id: profile.school_id,
+        student_id: profile.id,
+        placement_id: placement?.id ?? null,
+        date: vandaag,
+        mood: antwoorden.mood,
+        answer_1: antwoorden.a1,
+        answer_2: antwoorden.a2,
+        xp_awarded: 50,
+      }).select().single()
 
-    if (!error) {
+      if (error) {
+        console.error('Dagstory insert error:', error)
+        setFoutmelding(`Fout: ${error.message}`)
+        return
+      }
+
       const nieuweXP = (profile.xp || 0) + 50
       const nieuweLevel = Math.floor(nieuweXP / 300) + 1
       const nieuweStreak = (profile.streak || 0) + 1
@@ -543,8 +552,12 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
       setProfile(prev => ({ ...prev, xp: nieuweXP, level: nieuweLevel, streak: nieuweStreak }))
       setStories(prev => [data, ...prev])
       setKlaar(true)
+    } catch (e) {
+      console.error('Dagstory onverwachte fout:', e)
+      setFoutmelding('Onverwachte fout, probeer opnieuw.')
+    } finally {
+      setBezig(false)
     }
-    setBezig(false)
   }
 
   const fmtDag = (d) => {
@@ -695,6 +708,12 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
         <div style={{ textAlign: 'center', marginTop: 12, fontSize: 11, color: 'rgba(255,255,255,.3)', letterSpacing: '.5px' }}>
           {stap + 1} / {STAPPEN.length} · {fmtDag(vandaag)}
         </div>
+
+        {foutmelding && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(239,68,68,.2)', border: '1px solid rgba(239,68,68,.4)', borderRadius: 10, fontSize: 13, color: '#FCA5A5', textAlign: 'center' }}>
+            ⚠️ {foutmelding}
+          </div>
+        )}
       </div>
 
       <StoriesArchief stories={stories} fmtDag={fmtDag} />
