@@ -661,7 +661,7 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : (<>
             <textarea
               className="dag-placeholder"
               value={antwoorden[huidig.key]}
@@ -690,7 +690,7 @@ function DagstoryTab({ profile, placement, stories, setStories, setProfile }) {
                 </span>
               )}
             </div>
-          )}
+          </>) }
         </div>
 
         {/* Knoppen */}
