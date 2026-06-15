@@ -323,7 +323,7 @@ function UrenTab({ profile, placement, uren, setUren }) {
 
       {uren.length === 0 && (
         <div style={{ textAlign: 'center', padding: 40, color: DARK.sub }}>
-          <div style={{ fontSize: 40, marginBottom: 12, width: 72, height: 72, borderRadius: '50%', background: 'rgba(242,107,29,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>⏱</div>
+          <div style={{ fontSize: 40, marginBottom: 12, width: 72, height: 72, borderRadius: '50%', background: 'rgba(242,107,29,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>📋</div>
           <div style={{ fontSize: 14 }}>Nog geen uren ingediend</div>
         </div>
       )}
@@ -821,7 +821,7 @@ export default function StudentDashboard() {
 
   const TABS = [
     { key: 'stage', label: '🧭', sub: 'Mijn stage' },
-    { key: 'uren', label: '⏱', sub: 'Uren' },
+    { key: 'uren', label: '📋', sub: 'Uren' },
     { key: 'opdrachten', label: '📁', sub: 'Opdrachten' },
     { key: 'story', label: '📖', sub: 'Dagboek' },
   ]
