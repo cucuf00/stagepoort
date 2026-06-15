@@ -513,22 +513,57 @@ export default function OpdrachtenPage() {
             <div style={{ fontFamily: 'Sora,sans-serif', fontSize: 15, fontWeight: 700 }}>🏆 Badges</div>
             <button onClick={nieuweBadge} style={{ padding: '6px 14px', background: '#E8F0F6', border: 'none', borderRadius: 8, color: '#0E3A5C', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>+ Badge toevoegen</button>
           </div>
-          <p style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 16, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: '#5C6B7A', marginBottom: 12, lineHeight: 1.6 }}>
             Pas de naam, emoji of drempel aan. Studenten zien automatisch hun voortgang per badge.
           </p>
-          {badges.map(b => (
-            <div key={b.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #E4DDD4', flexWrap: 'wrap' }}>
-              <input value={b.emoji} onChange={e => updateBadge(b.id, 'emoji', e.target.value)} style={{ width: 50, padding: '6px', border: '1.5px solid #E4DDD4', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 20, textAlign: 'center' }} />
-              <input value={b.name} onChange={e => updateBadge(b.id, 'name', e.target.value)} style={{ flex: 1, minWidth: 140, padding: '6px 10px', border: '1.5px solid #E4DDD4', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13 }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#5C6B7A' }}>Drempel:</span>
-                <input type="number" value={b.threshold} onChange={e => updateBadge(b.id, 'threshold', parseInt(e.target.value) || 1)} style={{ width: 70, padding: '6px 8px', border: '1.5px solid #E4DDD4', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13, textAlign: 'center' }} />
-              </div>
-              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: '#E8F0F6', color: '#5C6B7A' }}>{b.type}</span>
-              <button onClick={() => slaBadge(b)} style={{ padding: '6px 12px', background: '#F26B1D', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Opslaan</button>
-              <button onClick={() => verwijderBadge(b.id)} style={{ padding: '6px 10px', background: '#FAEAE7', border: 'none', borderRadius: 8, color: '#C03020', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>🗑️</button>
+
+          {/* Informatiebalk: uitleg badge types */}
+          <div style={{ background: '#F0F6FF', border: '1px solid #C5D9EF', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#0E3A5C', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>ℹ️</span> Hoe werkt de drempel per type?
             </div>
-          ))}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 150, background: '#fff', border: '1px solid #C5D9EF', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#0E3A5C', marginBottom: 3 }}>⏱ hours</div>
+                <div style={{ fontSize: 11, color: '#5C6B7A', lineHeight: 1.5 }}>
+                  Drempel = aantal <strong>goedgekeurde uren</strong>.<br />
+                  Bijv. drempel 40 → badge na 40 uur stage.
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 150, background: '#fff', border: '1px solid #C5D9EF', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#0E3A5C', marginBottom: 3 }}>🔥 streak</div>
+                <div style={{ fontSize: 11, color: '#5C6B7A', lineHeight: 1.5 }}>
+                  Drempel = aantal <strong>dagen op rij</strong> een dagboek ingevuld.<br />
+                  Bijv. drempel 5 → badge na 5 aaneengesloten dagen.
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 150, background: '#fff', border: '1px solid #C5D9EF', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#0E3A5C', marginBottom: 3 }}>📚 assignments</div>
+                <div style={{ fontSize: 11, color: '#5C6B7A', lineHeight: 1.5 }}>
+                  Drempel = aantal <strong>ingeleverde opdrachten</strong>.<br />
+                  Bijv. drempel 3 → badge na 3 ingeleverde opdrachten.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {badges.map(b => {
+            const typeLabel = b.type === 'hours' ? '⏱ uur goedgekeurd' : b.type === 'streak' ? '🔥 dagen op rij' : b.type === 'assignments' ? '📚 opdrachten in' : b.type
+            return (
+              <div key={b.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #E4DDD4', flexWrap: 'wrap' }}>
+                <input value={b.emoji} onChange={e => updateBadge(b.id, 'emoji', e.target.value)} style={{ width: 50, padding: '6px', border: '1.5px solid #E4DDD4', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 20, textAlign: 'center' }} />
+                <input value={b.name} onChange={e => updateBadge(b.id, 'name', e.target.value)} style={{ flex: 1, minWidth: 140, padding: '6px 10px', border: '1.5px solid #E4DDD4', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: '#5C6B7A' }}>Drempel:</span>
+                  <input type="number" value={b.threshold} onChange={e => updateBadge(b.id, 'threshold', parseInt(e.target.value) || 1)} style={{ width: 70, padding: '6px 8px', border: '1.5px solid #E4DDD4', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13, textAlign: 'center' }} />
+                  <span style={{ fontSize: 11, color: '#5C6B7A' }}>{typeLabel}</span>
+                </div>
+                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: '#E8F0F6', color: '#5C6B7A' }}>{b.type}</span>
+                <button onClick={() => slaBadge(b)} style={{ padding: '6px 12px', background: '#F26B1D', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Opslaan</button>
+                <button onClick={() => verwijderBadge(b.id)} style={{ padding: '6px 10px', background: '#FAEAE7', border: 'none', borderRadius: 8, color: '#C03020', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>🗑️</button>
+              </div>
+            )
+          })}
         </div>
 
       </div>
